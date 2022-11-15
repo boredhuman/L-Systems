@@ -4,7 +4,7 @@ import 'dart:svg';
 import 'tree_node.dart';
 
 class App {
-  late SvgSvgElement svgContainer;
+  late Element svgContainer;
 
   App() {
     TreeNode root = TreeNode("");
@@ -118,7 +118,7 @@ class App {
                     iterations += 1;
 
                     svgContainer.children.clear();
-                    Rectangle<num> boundingBox = svgContainer.getBoundingClientRect();
+                    Rectangle<num> boundingBox = svgContainer.parent!.getBoundingClientRect();
                     int midPoint = boundingBox.width ~/ 2;
                     // fill TreeNode
                     layoutTreeNode(TreeNode("")..children.add(root), midPoint, 50);
@@ -132,7 +132,7 @@ class App {
                     iterations = 0;
 
                     svgContainer.children.clear();
-                    Rectangle<num> boundingBox = svgContainer.getBoundingClientRect();
+                    Rectangle<num> boundingBox = svgContainer.parent!.getBoundingClientRect();
                     int midPoint = boundingBox.width ~/ 2;
                     layoutTreeNode(TreeNode("")..children.add(root), midPoint, 50);
                   })
@@ -143,7 +143,7 @@ class App {
           ..style.setProperty("width", "100%")
           ..style.setProperty("height", "100%")
           ..onMouseDown.listen((event) {
-            if (event.target.hashCode == svgContainer.parent.hashCode || event.target.hashCode == svgContainer.hashCode) {
+            if (event.target.hashCode == svgContainer.parent!.parent.hashCode || event.target.hashCode == svgContainer.parent.hashCode) {
               dragging = true;
               prevMouseX = event.client.x.toInt();
               prevMouseY = event.client.y.toInt();
@@ -175,10 +175,13 @@ class App {
             }
           })
           ..children.addAll([
-            svgContainer = SvgSvgElement()
-              ..id = "svgContainer"
+            SvgSvgElement()
               ..style.setProperty("width", "100%")
               ..style.setProperty("height", "100%")
+              ..children.add(svgContainer = GElement()
+                ..id = "svgContainer"
+                ..style.setProperty("width", "100%")
+                ..style.setProperty("height", "100%"))
           ])
       ])
       ..style.setProperty("background-color", "#111111")
