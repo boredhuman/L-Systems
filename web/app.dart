@@ -2,6 +2,8 @@ import 'dart:html';
 import 'dart:svg';
 
 import 'tree_node.dart';
+import 'turtle_option.dart';
+import 'turtle_renderer.dart';
 
 class App {
   late Element svgContainer;
@@ -12,6 +14,8 @@ class App {
     int prevMouseX = 0;
     int prevMouseY = 0;
     bool dragging = false;
+    CanvasElement canvas = CanvasElement();
+    TurtleRenderer turtleRenderer = TurtleRenderer(canvas);
 
     document.body!
       ..style.setProperty("display", "flex")
@@ -27,8 +31,10 @@ class App {
           ..style.setProperty("align-items", "center")
           ..style.setProperty("text-align", "center")
           ..style.setProperty("color", "white")
+          ..style.setProperty("padding", "0 5px")
           ..children.addAll([
             DivElement()
+              ..style.setProperty("width", "100%")
               ..children.addAll([
                 InputElement()
                   ..id = "axiom"
@@ -121,7 +127,14 @@ class App {
                     Rectangle<num> boundingBox = svgContainer.parent!.getBoundingClientRect();
                     int midPoint = boundingBox.width ~/ 2;
                     // fill TreeNode
-                    layoutTreeNode(TreeNode("")..children.add(root), midPoint, 50);
+                    String renderMode = (document.getElementById("renderMode") as SelectElement).value!;
+                    if (renderMode == "Turtle") {
+                      // do turtle rendering
+                      turtleRenderer.render(getElementsAtDepth(root, iterations, 0), getTurtleConfig());
+                    } else {
+                      // render tree
+                      layoutTreeNode(TreeNode("")..children.add(root), midPoint, 50);
+                    }
                   }),
                 ParagraphElement()
                   ..text = "Reset"
@@ -135,7 +148,50 @@ class App {
                     Rectangle<num> boundingBox = svgContainer.parent!.getBoundingClientRect();
                     int midPoint = boundingBox.width ~/ 2;
                     layoutTreeNode(TreeNode("")..children.add(root), midPoint, 50);
-                  })
+                  }),
+                DivElement()
+                  ..style.setProperty("display", "flex")
+                  ..style.setProperty("justify-content", "space-between")
+                  ..style.setProperty("align-items", "center")
+                  ..children.addAll([
+                    ParagraphElement()..text = "Render Mode",
+                    SelectElement()
+                      ..id = "renderMode"
+                      ..style.setProperty("height", "30px")
+                      ..children.addAll([
+                        OptionElement()
+                          ..setAttribute("value", "Tree")
+                          ..text = "Tree",
+                        OptionElement()
+                          ..setAttribute("value", "Turtle")
+                          ..text = "Turtle"
+                      ])
+                      ..onChange.listen((event) {
+                        String? value = (event.target as SelectElement).value;
+
+                        if (value == "Turtle") {
+                          (document.getElementById("turtle config") as DivElement).style.removeProperty("display");
+                          (document.getElementById("svgRenderer") as Element).style.setProperty("display", "none");
+                          (document.getElementById("canvasRenderer") as Element).style.removeProperty("display");
+                        } else {
+                          (document.getElementById("turtle config") as DivElement).style.setProperty("display", "none");
+                          (document.getElementById("canvasRenderer") as Element).style.setProperty("display", "none");
+                          (document.getElementById("svgRenderer") as Element).style.removeProperty("display");
+                        }
+                      })
+                  ]),
+                DivElement()
+                  ..style.setProperty("display", "none")
+                  ..text = "Turtle Symbol Map"
+                  ..id = "turtle config"
+                  ..children.addAll([
+                    DivElement()
+                      ..children.addAll([
+                        createTurtleConfigRow("Forward", "F", 1),
+                        createTurtleConfigRow("Z Rotation", "-", -90),
+                        createTurtleConfigRow("Z Rotation", "+", 90)
+                      ])
+                  ])
               ])
           ]),
         // l system rendering
@@ -147,6 +203,7 @@ class App {
               dragging = true;
               prevMouseX = event.client.x.toInt();
               prevMouseY = event.client.y.toInt();
+              document.body?.style.setProperty("user-select", "none");
             }
           })
           ..onMouseMove.listen((event) {
@@ -176,12 +233,18 @@ class App {
           })
           ..children.addAll([
             SvgSvgElement()
+              ..id = "svgRenderer"
               ..style.setProperty("width", "100%")
               ..style.setProperty("height", "100%")
               ..children.add(svgContainer = GElement()
                 ..id = "svgContainer"
                 ..style.setProperty("width", "100%")
-                ..style.setProperty("height", "100%"))
+                ..style.setProperty("height", "100%")),
+            canvas
+              ..id = "canvasRenderer"
+              ..style.setProperty("display", "none")
+              ..style.setProperty("width", "100%")
+              ..style.setProperty("height", "100%")
           ])
       ])
       ..style.setProperty("background-color", "#111111")
@@ -190,7 +253,61 @@ class App {
 
     document.body!.onMouseUp.listen((event) {
       dragging = false;
+      document.body?.style.removeProperty("user-select");
     });
+  }
+
+  Map<String, TurtleOption> getTurtleConfig() {
+    List<Node> turtleOptions = document.getElementsByClassName("turtleOption");
+    Map<String, TurtleOption> turtleOptionsMap = {};
+
+    for (Node turtleOptionElement in turtleOptions) {
+      if (turtleOptionElement is Element) {
+        String command = (turtleOptionElement.children[0] as SelectElement).value!;
+        String symbol = (turtleOptionElement.children[1] as InputElement).value!;
+        String value = (turtleOptionElement.children[2] as InputElement).value!;
+
+        TurtleOption turtleOption = TurtleOption(command, symbol, double.parse(value));
+
+        turtleOptionsMap[symbol] = turtleOption;
+      }
+    }
+
+    return turtleOptionsMap;
+  }
+
+  // for creating a row for the turle configuration
+  Element createTurtleConfigRow([String? value, String? symbol, int? amount]) {
+    return DivElement()
+      ..style.setProperty("display", "flex")
+      ..classes.addAll(["turtleOption"])
+      ..children.addAll([
+        SelectElement()
+          ..children.addAll([
+            OptionElement()
+              ..value = "Forward"
+              ..text = "Forward",
+            OptionElement()
+              ..value = "X Rotation"
+              ..text = "X Rotation",
+            OptionElement()
+              ..value = "Y Rotation"
+              ..text = "Y Rotation",
+            OptionElement()
+              ..value = "Z Rotation"
+              ..text = "Z Rotation"
+          ])
+          ..value = value ?? "",
+        InputElement()
+          ..placeholder = "symbol"
+          ..style.setProperty("width", "100%")
+          ..style.setProperty("margin", "0 5px")
+          ..value = symbol ?? "",
+        InputElement()
+          ..placeholder = "amount"
+          ..style.setProperty("width", "100%")
+          ..value = amount != null ? amount.toString() : ""
+      ]);
   }
 
   layoutTreeNode(TreeNode node, int midPoint, int y) {
