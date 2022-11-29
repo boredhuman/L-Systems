@@ -1,7 +1,10 @@
 import 'dart:html';
+import 'dart:js_util';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:web_gl';
+
+import 'package:vector_math/vector_math.dart';
 
 import 'tree_node.dart';
 import 'turtle_option.dart';
@@ -14,6 +17,20 @@ class TurtleRenderer {
   late Program lineProgram;
 
   late Buffer vertexData;
+
+  int vertexCount = 0;
+
+  double xRot = 0;
+
+  double yRot = 0;
+
+  double scale = 0.1;
+
+  bool dragging = false;
+
+  int prevX = 0;
+
+  int prevY = 0;
 
   TurtleRenderer(this.canvas) : gl = canvas.getContext3d(stencil: false, antialias: false)! {
     Program program = gl.createProgram();
@@ -55,18 +72,62 @@ class TurtleRenderer {
 
   render(List<TreeNode> data, Map<String, TurtleOption> turtleOptions) {
     List<double> buffer = treeNodesToVertexData(data, turtleOptions);
-    gl.clear(WebGL.COLOR_BUFFER_BIT | WebGL.DEPTH_BUFFER_BIT);
+    vertexCount = buffer.length ~/ 7;
 
-    int positionAttribIndex = gl.getAttribLocation(lineProgram, "position");
+    buffer.addAll([
+      // y axis
+      0, 0, 0, 1, 0, 0, 1,
+      0, 10, 0, 1, 0, 0, 1,
+      // x axis
+      0, 0, 0, 0, 1, 0, 1,
+      10, 0, 0, 0, 1, 0, 1,
+      // z axis
+      0, 0, 0, 0, 0, 1, 1,
+      0, 0, 10, 0, 0, 1, 1,
+    ]);
 
     gl.bindBuffer(WebGL.ARRAY_BUFFER, vertexData);
     gl.bufferData(WebGL.ARRAY_BUFFER, Float32List.fromList(buffer), WebGL.STATIC_DRAW);
-    gl.vertexAttribPointer(positionAttribIndex, 3, WebGL.FLOAT, false, 12, 0);
+
+    renderInternal();
+  }
+
+  // call this to render, it will use data previously given
+  renderInternal() {
+    int actualWidth = canvas.getBoundingClientRect().width.toInt();
+    int actualHeight = canvas.getBoundingClientRect().height.toInt();
+    // canvas has been changed. Resize to keep 1:1 scaling
+    if (canvas.width != actualWidth || canvas.height != actualHeight) {
+      canvas.width = actualWidth;
+      canvas.height = actualHeight;
+      gl.viewport(0, 0, actualWidth, actualHeight);
+    }
+
+    gl.clear(WebGL.COLOR_BUFFER_BIT | WebGL.DEPTH_BUFFER_BIT);
+
+    int positionAttribIndex = gl.getAttribLocation(lineProgram, "position");
+    int colorAttribIndex = gl.getAttribLocation(lineProgram, "color");
+    UniformLocation transformMatrixUniformLocation = gl.getUniformLocation(lineProgram, "transformMatrix");
+
+    gl.bindBuffer(WebGL.ARRAY_BUFFER, vertexData);
+    gl.vertexAttribPointer(positionAttribIndex, 3, WebGL.FLOAT, false, 28, 0);
+    gl.vertexAttribPointer(colorAttribIndex, 4, WebGL.FLOAT, false, 28, 12);
 
     gl.useProgram(lineProgram);
-    gl.enableVertexAttribArray(positionAttribIndex);
+    Matrix4 matrix4 = Matrix4.identity();
+    matrix4.scale(scale, scale, scale);
+    // rotate around the y axis
+    matrix4.rotateY(xRot * pi / 180);
+    // rotate around the x axis
+    matrix4.rotateX(yRot * pi / 180);
+    gl.uniformMatrix4fv(transformMatrixUniformLocation, false, matrix4.storage);
 
-    gl.drawArrays(WebGL.LINE_STRIP, 0, buffer.length ~/ 3);
+    gl.enableVertexAttribArray(positionAttribIndex);
+    gl.enableVertexAttribArray(colorAttribIndex);
+
+    gl.drawArrays(WebGL.LINE_STRIP, 0, vertexCount);
+
+    gl.drawArrays(WebGL.LINES, vertexCount, vertexCount + 2);
 
     gl.disableVertexAttribArray(positionAttribIndex);
     gl.useProgram(null);
@@ -77,11 +138,10 @@ class TurtleRenderer {
   }
 
   List<double> treeNodesToVertexData(List<TreeNode> data, Map<String, TurtleOption> turtleOptions) {
-    var position = <double>[0, 0, 0];
-    var zero = <double>[0, 0, 0];
-    var rotationVec = <double>[1, 0, 0];
+    Vector3 position = Vector3(0, 0, 0);
+    Vector3 rotationVector = Vector3(1, 0, 0);
     var buffer = <double>[];
-    buffer.addAll([position[0], position[1], position[2]]);
+    buffer.addAll([position[0], position[1], position[2], 1, 1, 1, 1]);
 
     for (TreeNode treeNode in data) {
       for (int i = 0; i < treeNode.value.length; i++) {
@@ -92,23 +152,23 @@ class TurtleRenderer {
           continue;
         }
 
-        print("letter $letter");
-
         switch (turtleOption.command) {
           case 'Forward':
-            position[0] += rotationVec[0];
-            position[1] += rotationVec[1];
-            position[2] += rotationVec[2];
-            buffer.addAll([position[0], position[1], position[2]]);
+            position.add(rotationVector);
+            // white color
+            buffer.addAll([position[0], position[1], position[2], 1, 1, 1, 1]);
             break;
           case 'X Rotation':
-            rotateX(rotationVec, rotationVec, zero, turtleOption.value * pi / 180);
+            Quaternion quaternion = Quaternion.axisAngle(Vector3(1, 0, 0), turtleOption.value * pi / 180);
+            quaternion.rotate(rotationVector);
             break;
           case 'Y Rotation':
-            rotateY(rotationVec, rotationVec, zero, turtleOption.value * pi / 180);
+            Quaternion quaternion = Quaternion.axisAngle(Vector3(0, 1, 0), turtleOption.value * pi / 180);
+            quaternion.rotate(rotationVector);
             break;
           case 'Z Rotation':
-            rotateZ(rotationVec, rotationVec, zero, turtleOption.value * pi / 180);
+            Quaternion quaternion = Quaternion.axisAngle(Vector3(0, 0, 1), turtleOption.value * pi / 180);
+            quaternion.rotate(rotationVector);
             break;
           default:
             throw Exception('Unsupported command');
@@ -119,64 +179,36 @@ class TurtleRenderer {
     return buffer;
   }
 
-  List<double> rotateX(List<double> out, List<double> a, List<double> b, double rad) {
-    final p = <double>[0, 0, 0], r = <double>[0, 0, 0];
-    //Translate point to the origin
-    p[0] = a[0] - b[0];
-    p[1] = a[1] - b[1];
-    p[2] = a[2] - b[2];
+  // movement in x is interpreted as rotating around the y axis
+  // movement in y axis is interpreted as rotating around the x axis
+  onDrag(MouseEvent event) {
+    if (!dragging) {
+      return;
+    }
+    int currentX = event.client.x.toInt();
+    int currentY = event.client.y.toInt();
 
-    //perform rotation
-    r[0] = p[0];
-    r[1] = p[1] * cos(rad) - p[2] * sin(rad);
-    r[2] = p[1] * sin(rad) + p[2] * cos(rad);
+    if (currentX != prevX || currentY != prevY) {
+      int xDelta = currentX - prevX;
+      int yDelta = currentY - prevY;
 
-    //translate to correct position
-    out[0] = r[0] + b[0];
-    out[1] = r[1] + b[1];
-    out[2] = r[2] + b[2];
+      xRot += xDelta;
+      yRot += yDelta;
 
-    return out;
+      prevX = currentX;
+      prevY = currentY;
+
+      renderInternal();
+    }
   }
 
-  List<double> rotateY(List<double> out, List<double> a, List<double> b, double rad) {
-    final p = <double>[0, 0, 0], r = <double>[0, 0, 0];
-    //Translate point to the origin
-    p[0] = a[0] - b[0];
-    p[1] = a[1] - b[1];
-    p[2] = a[2] - b[2];
-
-    //perform rotation
-    r[0] = p[2] * sin(rad) + p[0] * cos(rad);
-    r[1] = p[1];
-    r[2] = p[2] * cos(rad) - p[0] * sin(rad);
-
-    //translate to correct position
-    out[0] = r[0] + b[0];
-    out[1] = r[1] + b[1];
-    out[2] = r[2] + b[2];
-
-    return out;
-  }
-
-  List<double> rotateZ(List<double> out, List<double> a, List<double> b, double rad) {
-    final p = <double>[0, 0, 0], r = <double>[0, 0, 0];
-    //Translate point to the origin
-    p[0] = a[0] - b[0];
-    p[1] = a[1] - b[1];
-    p[2] = a[2] - b[2];
-
-    //perform rotation
-    r[0] = p[0] * cos(rad) - p[1] * sin(rad);
-    r[1] = p[0] * sin(rad) + p[1] * cos(rad);
-    r[2] = p[2];
-
-    //translate to correct position
-    out[0] = r[0] + b[0];
-    out[1] = r[1] + b[1];
-    out[2] = r[2] + b[2];
-
-    return out;
+  onMouseWheelEvent(WheelEvent event) {
+    if (event.deltaY > 0) {
+      scale -= 0.01;
+    } else {
+      scale += 0.01;
+    }
+    renderInternal();
   }
 
   String vertexShader() {
@@ -184,10 +216,15 @@ class TurtleRenderer {
     precision mediump float;
 
     attribute vec3 position;
+    attribute vec4 color;
+    
+    varying vec4 outColor;
+    
+    uniform mat4 transformMatrix;
 
     void main() {
-      gl_Position = vec4(position / 10.0, 1.0);
-      gl_PointSize = 5.0;
+      gl_Position = transformMatrix * vec4(position, 1.0);
+      outColor = color;
     }
     """;
   }
@@ -196,8 +233,10 @@ class TurtleRenderer {
     return """
     precision mediump float;
     
+    varying vec4 outColor;
+    
     void main() {
-      gl_FragColor = vec4(1.0, 1.0, 0.0, 1.0);
+      gl_FragColor = outColor;
     }
     """;
   }

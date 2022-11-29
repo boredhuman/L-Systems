@@ -31,9 +31,7 @@ input {
   outline: white solid 1px;
 }
 
-textarea {
-  border-width: 0;
-  padding: 0;
-  outline: none;
+.material-symbols-outlined:hover {
+  color: red;
 }
 

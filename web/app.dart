@@ -1,4 +1,5 @@
 import 'dart:html';
+import 'dart:js_util';
 import 'dart:svg';
 
 import 'tree_node.dart';
@@ -32,6 +33,7 @@ class App {
           ..style.setProperty("text-align", "center")
           ..style.setProperty("color", "white")
           ..style.setProperty("padding", "0 5px")
+          ..style.setProperty("overflow", "auto")
           ..children.addAll([
             DivElement()
               ..style.setProperty("width", "100%")
@@ -66,12 +68,103 @@ class App {
                             InputElement()
                               ..classes.addAll(["rhs"])
                               ..style.setProperty("width", "10px")
-                              ..style.setProperty("flex", "1")
+                              ..style.setProperty("flex", "1"),
+                            SpanElement()
+                              ..classes.addAll(["material-symbols-outlined"])
+                              ..text = "close"
+                              ..onClick.listen((event) {
+                                (event.currentTarget as Element).parent!.remove();
+                              })
                           ]),
                         clicked);
                   }),
+                DivElement()
+                  ..style.setProperty("display", "flex")
+                  ..style.setProperty("justify-content", "space-between")
+                  ..style.setProperty("align-items", "center")
+                  ..children.addAll([
+                    ParagraphElement()
+                      ..text = "Render Mode"
+                      ..style.setProperty("margin", "0"),
+                    SelectElement()
+                      ..id = "renderMode"
+                      ..style.setProperty("height", "30px")
+                      ..children.addAll([
+                        OptionElement()
+                          ..setAttribute("value", "Tree")
+                          ..text = "Tree",
+                        OptionElement()
+                          ..setAttribute("value", "Turtle")
+                          ..text = "Turtle"
+                      ])
+                      ..onChange.listen((event) {
+                        String? value = (event.target as SelectElement).value;
+
+                        if (value == "Turtle") {
+                          (document.getElementById("turtle config") as DivElement).style.removeProperty("display");
+                          (document.getElementById("svgRenderer") as Element).style.setProperty("display", "none");
+                          (document.getElementById("canvasRenderer") as Element).style.removeProperty("display");
+                        } else {
+                          (document.getElementById("turtle config") as DivElement).style.setProperty("display", "none");
+                          (document.getElementById("canvasRenderer") as Element).style.setProperty("display", "none");
+                          (document.getElementById("svgRenderer") as Element).style.removeProperty("display");
+                        }
+                      })
+                  ]),
+                DivElement()
+                  ..style.setProperty("display", "none")
+                  ..text = "Turtle Symbol Map"
+                  ..id = "turtle config"
+                  ..children.addAll([
+                    createTurtleConfigRow("Forward", "F", 1),
+                    createTurtleConfigRow("Z Rotation", "-", -90),
+                    createTurtleConfigRow("Z Rotation", "+", 90),
+                    ParagraphElement()
+                      ..text = "Add Symbol Row"
+                      ..classes.addAll(["btn"])
+                      ..onClick.listen((event) {
+                        (event.currentTarget! as Element)
+                            .parent!
+                            .insertBefore(createTurtleConfigRow("Forward", "F", 1), event.currentTarget as Element);
+                      })
+                  ]),
+                // current generation display and step size configuration
+                DivElement()
+                  ..style.setProperty("display", "flex")
+                  ..style.setProperty("align-items", "center")
+                  ..style.setProperty("justify-content", "space-between")
+                  ..style.setProperty("height", "30px")
+                  ..children.addAll([
+                    ParagraphElement()
+                      ..style.setProperty("margin", "0")
+                      ..text = "Current Generation :"
+                      ..style.setProperty("white-space", "nowrap"),
+                    ParagraphElement()
+                      ..id = "currentGeneration"
+                      ..text = "0"
+                      ..style.setProperty("margin", "0 1px"),
+                  ]),
+                DivElement()
+                  ..style.setProperty("display", "flex")
+                  ..style.setProperty("justify-content", "space-between")
+                  ..style.setProperty("align-items", "center")
+                  ..style.setProperty("height", "30px")
+                  ..children.addAll([
+                    ParagraphElement()
+                      ..style.setProperty("margin", "0")
+                      ..text = "Step Size:"
+                      ..style.setProperty("white-space", "nowrap"),
+                    InputElement()
+                      ..id = "stepSize"
+                      ..setAttribute("type", "number")
+                      ..setAttribute("min", "1")
+                      ..style.setProperty("width", "40px")
+                      ..style.setProperty("margin", "0 1px")
+                      ..value = "1"
+                  ]),
+                // step button
                 ParagraphElement()
-                  ..text = "Compute"
+                  ..text = "Step"
                   ..classes.addAll(["btn"])
                   ..onClick.listen((event) {
                     print('Computing');
@@ -107,6 +200,7 @@ class App {
                     if (axiom != root.value) {
                       root = TreeNode(axiom);
                       iterations = 0;
+                      setCurrentGeneration(iterations);
                     }
 
                     // so we go over each node and convert each symbol in the value using the production rules
@@ -115,17 +209,17 @@ class App {
                       root.value = axiom;
                     }
 
-                    List<TreeNode> nodes = getElementsAtDepth(root, iterations, 0);
+                    int stepSize = getStepSize();
+                    for (int i = 0; i < stepSize; i += 1) {
+                      List<TreeNode> nodes = getElementsAtDepth(root, iterations, 0);
 
-                    for (var node in nodes) {
-                      applyProductionRulesToNode(productionRulesMap, node);
+                      for (var node in nodes) {
+                        applyProductionRulesToNode(productionRulesMap, node);
+                      }
+
+                      iterations += 1;
+                      setCurrentGeneration(iterations);
                     }
-
-                    iterations += 1;
-
-                    svgContainer.children.clear();
-                    Rectangle<num> boundingBox = svgContainer.parent!.getBoundingClientRect();
-                    int midPoint = boundingBox.width ~/ 2;
                     // fill TreeNode
                     String renderMode = (document.getElementById("renderMode") as SelectElement).value!;
                     if (renderMode == "Turtle") {
@@ -133,6 +227,9 @@ class App {
                       turtleRenderer.render(getElementsAtDepth(root, iterations, 0), getTurtleConfig());
                     } else {
                       // render tree
+                      svgContainer.children.clear();
+                      Rectangle<num> boundingBox = svgContainer.parent!.getBoundingClientRect();
+                      int midPoint = boundingBox.width ~/ 2;
                       layoutTreeNode(TreeNode("")..children.add(root), midPoint, 50);
                     }
                   }),
@@ -143,55 +240,13 @@ class App {
                     InputElement axiomElement = document.getElementById("axiom") as InputElement;
                     root = TreeNode(axiomElement.value!);
                     iterations = 0;
+                    setCurrentGeneration(iterations);
 
                     svgContainer.children.clear();
                     Rectangle<num> boundingBox = svgContainer.parent!.getBoundingClientRect();
                     int midPoint = boundingBox.width ~/ 2;
                     layoutTreeNode(TreeNode("")..children.add(root), midPoint, 50);
-                  }),
-                DivElement()
-                  ..style.setProperty("display", "flex")
-                  ..style.setProperty("justify-content", "space-between")
-                  ..style.setProperty("align-items", "center")
-                  ..children.addAll([
-                    ParagraphElement()..text = "Render Mode",
-                    SelectElement()
-                      ..id = "renderMode"
-                      ..style.setProperty("height", "30px")
-                      ..children.addAll([
-                        OptionElement()
-                          ..setAttribute("value", "Tree")
-                          ..text = "Tree",
-                        OptionElement()
-                          ..setAttribute("value", "Turtle")
-                          ..text = "Turtle"
-                      ])
-                      ..onChange.listen((event) {
-                        String? value = (event.target as SelectElement).value;
-
-                        if (value == "Turtle") {
-                          (document.getElementById("turtle config") as DivElement).style.removeProperty("display");
-                          (document.getElementById("svgRenderer") as Element).style.setProperty("display", "none");
-                          (document.getElementById("canvasRenderer") as Element).style.removeProperty("display");
-                        } else {
-                          (document.getElementById("turtle config") as DivElement).style.setProperty("display", "none");
-                          (document.getElementById("canvasRenderer") as Element).style.setProperty("display", "none");
-                          (document.getElementById("svgRenderer") as Element).style.removeProperty("display");
-                        }
-                      })
-                  ]),
-                DivElement()
-                  ..style.setProperty("display", "none")
-                  ..text = "Turtle Symbol Map"
-                  ..id = "turtle config"
-                  ..children.addAll([
-                    DivElement()
-                      ..children.addAll([
-                        createTurtleConfigRow("Forward", "F", 1),
-                        createTurtleConfigRow("Z Rotation", "-", -90),
-                        createTurtleConfigRow("Z Rotation", "+", 90)
-                      ])
-                  ])
+                  })
               ])
           ]),
         // l system rendering
@@ -207,6 +262,11 @@ class App {
             }
           })
           ..onMouseMove.listen((event) {
+            // dont let svg get dragging when we are in turtle mode
+            if ((document.getElementById("renderMode") as SelectElement).value == "Turtle") {
+              turtleRenderer.onDrag(event);
+              return;
+            }
             if (dragging) {
               int xDelta = event.client.x.toInt() - prevMouseX;
               int yDelta = event.client.y.toInt() - prevMouseY;
@@ -232,6 +292,7 @@ class App {
             }
           })
           ..children.addAll([
+            // svg tree renderer
             SvgSvgElement()
               ..id = "svgRenderer"
               ..style.setProperty("width", "100%")
@@ -240,11 +301,18 @@ class App {
                 ..id = "svgContainer"
                 ..style.setProperty("width", "100%")
                 ..style.setProperty("height", "100%")),
+            // canvas renderer
             canvas
               ..id = "canvasRenderer"
               ..style.setProperty("display", "none")
               ..style.setProperty("width", "100%")
               ..style.setProperty("height", "100%")
+              ..onMouseWheel.listen(turtleRenderer.onMouseWheelEvent)
+              ..onMouseDown.listen((event) {
+                turtleRenderer.dragging = true;
+                turtleRenderer.prevX = event.client.x.toInt();
+                turtleRenderer.prevY = event.client.y.toInt();
+              })
           ])
       ])
       ..style.setProperty("background-color", "#111111")
@@ -253,6 +321,7 @@ class App {
 
     document.body!.onMouseUp.listen((event) {
       dragging = false;
+      turtleRenderer.dragging = false;
       document.body?.style.removeProperty("user-select");
     });
   }
@@ -306,7 +375,13 @@ class App {
         InputElement()
           ..placeholder = "amount"
           ..style.setProperty("width", "100%")
-          ..value = amount != null ? amount.toString() : ""
+          ..value = amount != null ? amount.toString() : "",
+        SpanElement()
+          ..classes.addAll(["material-symbols-outlined"])
+          ..text = "close"
+          ..onClick.listen((event) {
+            (event.currentTarget as Element).parent!.remove();
+          })
       ]);
   }
 
@@ -339,12 +414,37 @@ class App {
             ..style.setProperty("color", "white")
             ..style.setProperty("margin", "0")
             ..style.setProperty("margin-top", "3px")
-            ..style.setProperty("text-align", "center"))
+            ..style.setProperty("text-align", "center")),
+        LineElement()
+          ..setAttribute("x1", "$xStart")
+          ..setAttribute("y1", "${y - 25 / 2}")
+          ..setAttribute("x2", "$xStart")
+          ..setAttribute("y2", "$y")
+          ..setAttribute("stroke", "white")
       ]);
+
+      if (i != node.children.length - 1) {
+        svgContainer.children.addAll([
+          LineElement()
+            ..setAttribute("x1", "$xStart")
+            ..setAttribute("y1", "${y - 25 / 2}")
+            ..setAttribute("x2", "${xStart + nodeWidth}")
+            ..setAttribute("y2", "${y - 25 / 2}")
+            ..setAttribute("stroke", "white")
+        ]);
+      }
 
       layoutTreeNode(node.children[i], xStart, y + 50);
 
       xStart += nodeWidth ~/ 2;
+    }
+
+    if (node.children.isNotEmpty) {
+      svgContainer.children.addAll([
+        LineElement()
+          ..setAttribute("x1", "$midPoint")..setAttribute("y1", "${y - 25}")..setAttribute("x2", "$midPoint")..setAttribute(
+            "y2", "${y - 25 / 2}")..setAttribute("stroke", "white")
+      ]);
     }
   }
 
@@ -393,5 +493,15 @@ class App {
         node.addNode(TreeNode(string[i]));
       }
     }
+  }
+
+  setCurrentGeneration(int generation) {
+    Element currentGenerationElement = document.getElementById("currentGeneration") as Element;
+    currentGenerationElement.text = generation.toString();
+  }
+
+  int getStepSize() {
+    InputElement stepSizeElement = document.getElementById("stepSize") as InputElement;
+    return stepSizeElement.valueAsNumber!.toInt();
   }
 }
