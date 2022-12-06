@@ -67,12 +67,27 @@ class TurtleRenderer {
 
     gl.clearColor(0, 0, 0, 0);
 
+    // setup
+    gl.useProgram(lineProgram);
+
     vertexData = gl.createBuffer();
+    gl.bindBuffer(WebGL.ARRAY_BUFFER, vertexData);
+
+    int positionAttribIndex = gl.getAttribLocation(lineProgram, "position");
+    int colorAttribIndex = gl.getAttribLocation(lineProgram, "color");
+
+    gl.vertexAttribPointer(positionAttribIndex, 3, WebGL.FLOAT, false, 28, 0);
+    gl.vertexAttribPointer(colorAttribIndex, 4, WebGL.FLOAT, false, 28, 12);
+
+    gl.enableVertexAttribArray(positionAttribIndex);
+    gl.enableVertexAttribArray(colorAttribIndex);
   }
 
   render(List<TreeNode> data, Map<String, TurtleOption> turtleOptions) {
     List<double> buffer = treeNodesToVertexData(data, turtleOptions);
     vertexCount = buffer.length ~/ 7;
+    print("vertexCount $vertexCount");
+    print(buffer);
 
     buffer.addAll([
       // y axis
@@ -86,7 +101,6 @@ class TurtleRenderer {
       0, 0, 10, 0, 0, 1, 1,
     ]);
 
-    gl.bindBuffer(WebGL.ARRAY_BUFFER, vertexData);
     gl.bufferData(WebGL.ARRAY_BUFFER, Float32List.fromList(buffer), WebGL.STATIC_DRAW);
 
     renderInternal();
@@ -105,15 +119,8 @@ class TurtleRenderer {
 
     gl.clear(WebGL.COLOR_BUFFER_BIT | WebGL.DEPTH_BUFFER_BIT);
 
-    int positionAttribIndex = gl.getAttribLocation(lineProgram, "position");
-    int colorAttribIndex = gl.getAttribLocation(lineProgram, "color");
     UniformLocation transformMatrixUniformLocation = gl.getUniformLocation(lineProgram, "transformMatrix");
 
-    gl.bindBuffer(WebGL.ARRAY_BUFFER, vertexData);
-    gl.vertexAttribPointer(positionAttribIndex, 3, WebGL.FLOAT, false, 28, 0);
-    gl.vertexAttribPointer(colorAttribIndex, 4, WebGL.FLOAT, false, 28, 12);
-
-    gl.useProgram(lineProgram);
     Matrix4 matrix4 = Matrix4.identity();
     matrix4.scale(scale, scale, scale);
     // rotate around the y axis
@@ -122,15 +129,9 @@ class TurtleRenderer {
     matrix4.rotateX(yRot * pi / 180);
     gl.uniformMatrix4fv(transformMatrixUniformLocation, false, matrix4.storage);
 
-    gl.enableVertexAttribArray(positionAttribIndex);
-    gl.enableVertexAttribArray(colorAttribIndex);
-
     gl.drawArrays(WebGL.LINE_STRIP, 0, vertexCount);
 
-    gl.drawArrays(WebGL.LINES, vertexCount, vertexCount + 2);
-
-    gl.disableVertexAttribArray(positionAttribIndex);
-    gl.useProgram(null);
+    gl.drawArrays(WebGL.LINES, vertexCount, 6);
 
     window.requestAnimationFrame((highResTime) {
       // call render to complete render loop or do nothing to render once
@@ -154,7 +155,9 @@ class TurtleRenderer {
 
         switch (turtleOption.command) {
           case 'Forward':
-            position.add(rotationVector);
+            position[0] += rotationVector[0] * turtleOption.value;
+            position[1] += rotationVector[1] * turtleOption.value;
+            position[2] += rotationVector[2] * turtleOption.value;
             // white color
             buffer.addAll([position[0], position[1], position[2], 1, 1, 1, 1]);
             break;
@@ -204,9 +207,9 @@ class TurtleRenderer {
 
   onMouseWheelEvent(WheelEvent event) {
     if (event.deltaY > 0) {
-      scale -= 0.01;
+      scale *= 0.5;
     } else {
-      scale += 0.01;
+      scale *= 2;
     }
     renderInternal();
   }

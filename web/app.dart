@@ -1,5 +1,5 @@
+import 'dart:convert';
 import 'dart:html';
-import 'dart:js_util';
 import 'dart:svg';
 
 import 'tree_node.dart';
@@ -37,46 +37,23 @@ class App {
           ..children.addAll([
             DivElement()
               ..style.setProperty("width", "100%")
+              ..style.setProperty("overflow", "hidden")
               ..children.addAll([
                 InputElement()
                   ..id = "axiom"
+                  ..value = "A"
                   ..placeholder = "axiom"
                   ..style.setProperty("margin", "auto")
                   ..style.setProperty("text-align", "center"),
+                createProductionRule("A", "AB"),
+                createProductionRule("B", "A"),
                 ParagraphElement()
                   ..text = "Add Production Rule"
                   ..classes.addAll(["btn"])
                   ..onClick.listen((event) {
                     Element clicked = event.target as Element;
 
-                    clicked.parent!.insertBefore(
-                        DivElement()
-                          // pr = production rule
-                          ..classes.addAll(["pr"])
-                          ..style.setProperty("padding-top", "5px")
-                          ..style.setProperty("display", "flex")
-                          ..style.setProperty("height", "25px")
-                          ..children.addAll([
-                            InputElement()
-                              ..classes.addAll(["lhs"])
-                              ..style.setProperty("width", "30px")
-                              // max length as all productions rules must be context free
-                              ..setAttribute("maxlength", "1"),
-                            ParagraphElement()
-                              ..text = "->"
-                              ..style.setProperty("margin", "0"),
-                            InputElement()
-                              ..classes.addAll(["rhs"])
-                              ..style.setProperty("width", "10px")
-                              ..style.setProperty("flex", "1"),
-                            SpanElement()
-                              ..classes.addAll(["material-symbols-outlined"])
-                              ..text = "close"
-                              ..onClick.listen((event) {
-                                (event.currentTarget as Element).parent!.remove();
-                              })
-                          ]),
-                        clicked);
+                    clicked.parent!.insertBefore(createProductionRule(null, null), clicked);
                   }),
                 DivElement()
                   ..style.setProperty("display", "flex")
@@ -167,30 +144,9 @@ class App {
                   ..text = "Step"
                   ..classes.addAll(["btn"])
                   ..onClick.listen((event) {
-                    print('Computing');
-                    List<Node> productionRules = document.getElementsByClassName("pr");
-                    Map<String, String> productionRulesMap = {};
+                    Map<String, String> productionRulesMap = getProductionRulesMap();
 
-                    for (Node node in productionRules) {
-                      if (node is Element) {
-                        List<Node> lhs = node.getElementsByClassName("lhs");
-                        List<Node> rhs = node.getElementsByClassName("rhs");
-
-                        if (lhs.isNotEmpty && lhs[0] is InputElement && rhs.isNotEmpty && rhs[0] is InputElement) {
-                          InputElement lhsElement = lhs[0] as InputElement;
-                          InputElement rhsElement = rhs[0] as InputElement;
-                          String? lhsText = lhsElement.value;
-                          String? rhsText = rhsElement.value;
-
-                          if (lhsText != null) {
-                            productionRulesMap[lhsText] = rhsText ?? "";
-                          }
-                        }
-                      }
-                    }
-
-                    InputElement axiomElement = document.getElementById("axiom") as InputElement;
-                    String? axiom = axiomElement.value;
+                    String? axiom = getAxiom();
 
                     if (axiom == null || axiom.isEmpty) {
                       return;
@@ -246,7 +202,65 @@ class App {
                     Rectangle<num> boundingBox = svgContainer.parent!.getBoundingClientRect();
                     int midPoint = boundingBox.width ~/ 2;
                     layoutTreeNode(TreeNode("")..children.add(root), midPoint, 50);
-                  })
+                  }),
+                ParagraphElement()
+                  ..text = "Save Project"
+                  ..classes.addAll(["btn"])
+                  ..onClick.listen((event) {
+                    Map<String, dynamic> saveData = {};
+                    saveData["axiom"] = getAxiom();
+                    saveData["productionRules"] = getProductionRulesMap();
+                    saveData["turtleData"] = getTurtleConfig()
+                        .map((key, value) => MapEntry(key, {"value": value.value, "command": value.command, "symbol": value.symbol}));
+                    String saveDataText = JsonEncoder().convert(saveData);
+
+                    Element tempElement = document.createElement('a');
+                    tempElement.setAttribute('href', "data:text/plain;charset=utf-8,${Uri.encodeComponent(saveDataText)}");
+                    tempElement.setAttribute('download', "l-system.json");
+
+                    tempElement.style.display = 'none';
+                    document.body!.children.add(tempElement);
+
+                    tempElement.click();
+
+                    tempElement.remove();
+                  }),
+                InputElement(type: "file")
+                  ..style.setProperty("width", "100%")
+                  ..onChange.listen((event) {
+                    InputElement self = event.target as InputElement;
+                    if (self.files != null && self.files!.isNotEmpty) {
+                      File file = self.files![0];
+                      Blob blob = file.slice(0, file.size);
+                      FileReader()
+                        ..readAsText(blob)
+                        ..onLoadEnd.listen((event) {
+                          String jsonData = (event.target as FileReader).result as String;
+
+                          Map<String, dynamic> json = jsonDecode(jsonData);
+
+                          // symbol then field and value for turtleOption
+                          Map<dynamic, dynamic> turtleData = json["turtleData"];
+                          Map<dynamic, dynamic> productionRulesMap = json["productionRules"];
+
+                          InputElement axiomElement = document.getElementById("axiom") as InputElement;
+
+                          axiomElement.value = json["axiom"];
+
+                          for (MapEntry<dynamic, dynamic> rule in productionRulesMap.entries) {
+                            axiomElement.parent!.insertBefore(createProductionRule(rule.key, rule.value), axiomElement.nextNode!);
+                          }
+
+                          Element turtleConfigElement = document.getElementById("turtle config")!;
+
+                          for (MapEntry<dynamic, dynamic> turtleConfigEntry in turtleData.entries) {
+                            Map<dynamic, dynamic> turtleConfig = turtleConfigEntry.value;
+                            turtleConfigElement.children
+                                .add(createTurtleConfigRow(turtleConfig["command"]!, turtleConfig["symbol"]!, turtleConfig["value"]!));
+                          }
+                        });
+                    }
+                  }),
               ])
           ]),
         // l system rendering
@@ -346,7 +360,7 @@ class App {
   }
 
   // for creating a row for the turle configuration
-  Element createTurtleConfigRow([String? value, String? symbol, int? amount]) {
+  Element createTurtleConfigRow([String? command, String? symbol, int? amount]) {
     return DivElement()
       ..style.setProperty("display", "flex")
       ..classes.addAll(["turtleOption"])
@@ -366,7 +380,7 @@ class App {
               ..value = "Z Rotation"
               ..text = "Z Rotation"
           ])
-          ..value = value ?? "",
+          ..value = command ?? "",
         InputElement()
           ..placeholder = "symbol"
           ..style.setProperty("width", "100%")
@@ -396,6 +410,8 @@ class App {
     }
 
     int xStart = midPoint - totalWidth ~/ 2;
+    int rowStart = -1;
+    int rowEnd = -1;
 
     for (int i = 0; i < node.children.length; i++) {
       int nodeWidth = widths[i];
@@ -423,15 +439,10 @@ class App {
           ..setAttribute("stroke", "white")
       ]);
 
-      if (i != node.children.length - 1) {
-        svgContainer.children.addAll([
-          LineElement()
-            ..setAttribute("x1", "$xStart")
-            ..setAttribute("y1", "${y - 25 / 2}")
-            ..setAttribute("x2", "${xStart + nodeWidth}")
-            ..setAttribute("y2", "${y - 25 / 2}")
-            ..setAttribute("stroke", "white")
-        ]);
+      if (i == 0) {
+        rowStart = xStart;
+      } else if (i == node.children.length - 1) {
+        rowEnd = xStart;
       }
 
       layoutTreeNode(node.children[i], xStart, y + 50);
@@ -441,10 +452,23 @@ class App {
 
     if (node.children.isNotEmpty) {
       svgContainer.children.addAll([
+        // line down to connect to children
         LineElement()
-          ..setAttribute("x1", "$midPoint")..setAttribute("y1", "${y - 25}")..setAttribute("x2", "$midPoint")..setAttribute(
-            "y2", "${y - 25 / 2}")..setAttribute("stroke", "white")
+          ..setAttribute("x1", "$midPoint")
+          ..setAttribute("y1", "${y - 25}")
+          ..setAttribute("x2", "$midPoint")
+          ..setAttribute("y2", "${y - 25 / 2}")
+          ..setAttribute("stroke", "white")
       ]);
+      // line from the top of the first child to the last child
+      if (rowStart != -1 && rowEnd != -1) {
+        svgContainer.children.add(LineElement()
+          ..setAttribute("x1", "$rowStart")
+          ..setAttribute("y1", "${y - 25 / 2}")
+          ..setAttribute("x2", "$rowEnd")
+          ..setAttribute("y2", "${y - 25 / 2}")
+          ..setAttribute("stroke", "red"));
+      }
     }
   }
 
@@ -503,5 +527,64 @@ class App {
   int getStepSize() {
     InputElement stepSizeElement = document.getElementById("stepSize") as InputElement;
     return stepSizeElement.valueAsNumber!.toInt();
+  }
+
+  DivElement createProductionRule(String? lhs, String? rhs) {
+    return DivElement()
+      // pr = production rule
+      ..classes.addAll(["pr"])
+      ..style.setProperty("padding-top", "5px")
+      ..style.setProperty("display", "flex")
+      ..style.setProperty("height", "25px")
+      ..children.addAll([
+        InputElement()
+          ..classes.addAll(["lhs"])
+          ..style.setProperty("width", "30px")
+          // max length as all productions rules must be context free
+          ..setAttribute("maxlength", "1")
+          ..value = lhs,
+        ParagraphElement()
+          ..text = "->"
+          ..style.setProperty("margin", "0"),
+        InputElement()
+          ..classes.addAll(["rhs"])
+          ..style.setProperty("width", "10px")
+          ..style.setProperty("flex", "1")
+          ..value = rhs,
+        SpanElement()
+          ..classes.addAll(["material-symbols-outlined"])
+          ..text = "close"
+          ..onClick.listen((event) {
+            (event.currentTarget as Element).parent!.remove();
+          })
+      ]);
+  }
+
+  Map<String, String> getProductionRulesMap() {
+    List<Node> productionRules = document.getElementsByClassName("pr");
+    Map<String, String> productionRulesMap = {};
+
+    for (Node node in productionRules) {
+      if (node is Element) {
+        List<Node> lhs = node.getElementsByClassName("lhs");
+        List<Node> rhs = node.getElementsByClassName("rhs");
+
+        if (lhs.isNotEmpty && lhs[0] is InputElement && rhs.isNotEmpty && rhs[0] is InputElement) {
+          InputElement lhsElement = lhs[0] as InputElement;
+          InputElement rhsElement = rhs[0] as InputElement;
+          String? lhsText = lhsElement.value;
+          String? rhsText = rhsElement.value;
+
+          if (lhsText != null) {
+            productionRulesMap[lhsText] = rhsText ?? "";
+          }
+        }
+      }
+    }
+    return productionRulesMap;
+  }
+
+  String? getAxiom() {
+    return (document.getElementById("axiom") as InputElement).value;
   }
 }
