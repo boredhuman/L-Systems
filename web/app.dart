@@ -3,11 +3,13 @@ import 'dart:html';
 import 'dart:svg';
 
 import 'tree_node.dart';
+import 'tree_renderer.dart';
 import 'turtle_option.dart';
 import 'turtle_renderer.dart';
 
 class App {
   late Element svgContainer;
+  late TreeRenderer treeRenderer;
 
   App() {
     TreeNode root = TreeNode("");
@@ -183,10 +185,8 @@ class App {
                       turtleRenderer.render(getElementsAtDepth(root, iterations, 0), getTurtleConfig());
                     } else {
                       // render tree
-                      svgContainer.children.clear();
-                      Rectangle<num> boundingBox = svgContainer.parent!.getBoundingClientRect();
-                      int midPoint = boundingBox.width ~/ 2;
-                      layoutTreeNode(TreeNode("")..children.add(root), midPoint, 50);
+                      // svgContainer.children.clear();
+                      treeRenderer.layoutTreeNodeInit(TreeNode("")..children.add(root), 50);
                     }
                   }),
                 ParagraphElement()
@@ -199,9 +199,7 @@ class App {
                     setCurrentGeneration(iterations);
 
                     svgContainer.children.clear();
-                    Rectangle<num> boundingBox = svgContainer.parent!.getBoundingClientRect();
-                    int midPoint = boundingBox.width ~/ 2;
-                    layoutTreeNode(TreeNode("")..children.add(root), midPoint, 50);
+                    treeRenderer.layoutTreeNodeInit(TreeNode("")..children.add(root), 50);
                   }),
                 ParagraphElement()
                   ..text = "Save Project"
@@ -302,6 +300,8 @@ class App {
 
                 prevMouseX = event.client.x.toInt();
                 prevMouseY = event.client.y.toInt();
+
+                treeRenderer.layoutTreeNodeInit(TreeNode("")..children.add(root), 50, true);
               }
             }
           })
@@ -338,6 +338,8 @@ class App {
       turtleRenderer.dragging = false;
       document.body?.style.removeProperty("user-select");
     });
+
+    treeRenderer = TreeRenderer(svgContainer);
   }
 
   Map<String, TurtleOption> getTurtleConfig() {
@@ -399,91 +401,6 @@ class App {
       ]);
   }
 
-  layoutTreeNode(TreeNode node, int midPoint, int y) {
-    List<int> widths = [];
-    int totalWidth = 0;
-
-    for (TreeNode child in node.children) {
-      int width = getNodeWidth(child);
-      widths.add(width);
-      totalWidth += width;
-    }
-
-    int xStart = midPoint - totalWidth ~/ 2;
-    int rowStart = -1;
-    int rowEnd = -1;
-
-    for (int i = 0; i < node.children.length; i++) {
-      int nodeWidth = widths[i];
-      xStart += nodeWidth ~/ 2;
-      // draw rect
-      svgContainer.children.addAll([
-        ForeignObjectElement()
-          ..setAttribute("x", "${xStart - 50}")
-          ..setAttribute("y", "$y")
-          ..setAttribute("width", "100")
-          ..setAttribute("height", "25")
-          ..style.setProperty("background-color", "#333")
-          ..style.setProperty("border-radius", "3px")
-          ..children.add(ParagraphElement()
-            ..text = node.children[i].value
-            ..style.setProperty("color", "white")
-            ..style.setProperty("margin", "0")
-            ..style.setProperty("margin-top", "3px")
-            ..style.setProperty("text-align", "center")),
-        LineElement()
-          ..setAttribute("x1", "$xStart")
-          ..setAttribute("y1", "${y - 25 / 2}")
-          ..setAttribute("x2", "$xStart")
-          ..setAttribute("y2", "$y")
-          ..setAttribute("stroke", "white")
-      ]);
-
-      if (i == 0) {
-        rowStart = xStart;
-      } else if (i == node.children.length - 1) {
-        rowEnd = xStart;
-      }
-
-      layoutTreeNode(node.children[i], xStart, y + 50);
-
-      xStart += nodeWidth ~/ 2;
-    }
-
-    if (node.children.isNotEmpty) {
-      svgContainer.children.addAll([
-        // line down to connect to children
-        LineElement()
-          ..setAttribute("x1", "$midPoint")
-          ..setAttribute("y1", "${y - 25}")
-          ..setAttribute("x2", "$midPoint")
-          ..setAttribute("y2", "${y - 25 / 2}")
-          ..setAttribute("stroke", "white")
-      ]);
-      // line from the top of the first child to the last child
-      if (rowStart != -1 && rowEnd != -1) {
-        svgContainer.children.add(LineElement()
-          ..setAttribute("x1", "$rowStart")
-          ..setAttribute("y1", "${y - 25 / 2}")
-          ..setAttribute("x2", "$rowEnd")
-          ..setAttribute("y2", "${y - 25 / 2}")
-          ..setAttribute("stroke", "red"));
-      }
-    }
-  }
-
-  int getNodeWidth(TreeNode node) {
-    if (node.children.isNotEmpty) {
-      int width = 0;
-      for (TreeNode child in node.children) {
-        width += getNodeWidth(child);
-      }
-      return width;
-    } else {
-      return 150;
-    }
-  }
-
   // recursively gets all the element at a given depth
   // todo probably needs optimizing
   List<TreeNode> getElementsAtDepth(TreeNode node, int depth, int currentDepth) {
@@ -503,7 +420,7 @@ class App {
     }
   }
 
-  applyProductionRulesToNode(Map<String, String> productionRulesMap, TreeNode node) {
+  void applyProductionRulesToNode(Map<String, String> productionRulesMap, TreeNode node) {
     String string = node.value;
     // iterate over each character cna check if there is production rule for it
     // todo potentially add support for production rules longer than a single character
@@ -519,7 +436,7 @@ class App {
     }
   }
 
-  setCurrentGeneration(int generation) {
+  void setCurrentGeneration(int generation) {
     Element currentGenerationElement = document.getElementById("currentGeneration") as Element;
     currentGenerationElement.text = generation.toString();
   }
