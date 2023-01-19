@@ -361,7 +361,7 @@ class App {
     return turtleOptionsMap;
   }
 
-  // for creating a row for the turle configuration
+  // for creating a row for the turtle configuration
   Element createTurtleConfigRow([String? command, String? symbol, int? amount]) {
     return DivElement()
       ..style.setProperty("display", "flex")

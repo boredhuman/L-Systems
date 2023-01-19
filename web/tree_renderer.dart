@@ -32,16 +32,22 @@ class TreeRenderer {
     layoutTreeNode(node, midPoint, y, visibilityCheckOnly ?? false);
   }
 
-  updateElement(Element element, int x, int y, int right, int bottom) {
-    bool visible = isVisible(element, x, y, right, bottom);
-    if (element.parent != null && !visible) {
-      element.remove();
-    } else if (visible) {
-      svgContainer.children.add(element);
+  updateElement(Element? element, int x, int y, int right, int bottom, Element Function() supplier) {
+    bool visible = isVisible(x, y, right, bottom);
+    if (element != null) {
+      if (element.parent != null && !visible) {
+        element.remove();
+      } else if (visible) {
+        svgContainer.children.add(element);
+      }
+    } else {
+      if (visible) {
+        svgContainer.children.add(supplier());
+      }
     }
   }
 
-  bool isVisible(Element element, int x, int y, int right, int bottom) {
+  bool isVisible(int x, int y, int right, int bottom) {
     int svgRight = svgContainerBoundingRect.right.toInt();
     int svgLeft = svgContainerBoundingRect.left.toInt();
     int svgTop = svgContainerBoundingRect.top.toInt();
@@ -78,51 +84,56 @@ class TreeRenderer {
       xStart += nodeWidth ~/ 2;
       TreeNode childNode = node.children[i];
 
+      self() {
+        return childNode.self = ForeignObjectElement()
+          ..setAttribute("x", "${xStart - 50}")
+          ..setAttribute("y", "$y")
+          ..setAttribute("width", "100")
+          ..setAttribute("height", "25")
+          ..classes.add("nodeBox")
+          ..children.add(ParagraphElement()
+            ..text = childNode.value
+            ..classes.add("nodeText"));
+      }
+
+      stalk() {
+        return childNode.stalk = LineElement()
+          ..setAttribute("x1", "$xStart")
+          ..setAttribute("y1", "${y - 25 / 2}")
+          ..setAttribute("x2", "$xStart")
+          ..setAttribute("y2", "$y")
+          ..setAttribute("stroke", "white");
+      }
+
       if (!node.laidOut) {
         // background and text
-        updateElement(
-            childNode.self = ForeignObjectElement()
-              ..setAttribute("x", "${xStart - 50}")
-              ..setAttribute("y", "$y")
-              ..setAttribute("width", "100")
-              ..setAttribute("height", "25")
-              ..classes.add("nodeBox")
-              ..children.add(ParagraphElement()
-                ..text = childNode.value
-                ..classes.add("nodeText")),
-            xStart,
-            y,
-            xStart + 50,
-            y + 25);
+        updateElement(null, xStart, y, xStart + 50, y + 25, self);
         // line connecting node box to the parent line above
-        updateElement(
-            childNode.stalk = LineElement()
-              ..setAttribute("x1", "$xStart")
-              ..setAttribute("y1", "${y - 25 / 2}")
-              ..setAttribute("x2", "$xStart")
-              ..setAttribute("y2", "$y")
-              ..setAttribute("stroke", "white"),
-            xStart,
-            y - 25 ~/ 2,
-            xStart,
-            y);
+        updateElement(null, xStart, y - 25 ~/ 2, xStart, y, stalk);
       } else {
         // background and text
         if (!visibilityCheckOnly) {
-          childNode.self!
-            ..setAttribute("x", "${xStart - 50}")
-            ..setAttribute("y", "$y");
+          if (childNode.self != null) {
+            childNode.self!
+              ..setAttribute("x", "${xStart - 50}")
+              ..setAttribute("y", "$y");
+          }
         }
 
-        updateElement(childNode.self!, xStart - 50, y, xStart + 50, y + 25);
+        updateElement(childNode.self, xStart - 50, y, xStart + 50, y + 25, self);
 
         // line connecting node box to the parent line above
         if (!visibilityCheckOnly) {
-          childNode.stalk!
-            ..setAttribute("x1", "$xStart")..setAttribute("y1", "${y - 25 / 2}")..setAttribute("x2", "$xStart")..setAttribute("y2", "$y");
+          if (childNode.stalk != null) {
+            childNode.stalk!
+              ..setAttribute("x1", "$xStart")
+              ..setAttribute("y1", "${y - 25 / 2}")
+              ..setAttribute("x2", "$xStart")
+              ..setAttribute("y2", "$y");
+          }
         }
 
-        updateElement(childNode.stalk!, xStart, y - 25 ~/ 2, xStart, y);
+        updateElement(childNode.stalk, xStart, y - 25 ~/ 2, xStart, y, stalk);
       }
 
       if (i == 0) {
@@ -137,56 +148,58 @@ class TreeRenderer {
     }
 
     if (node.children.isNotEmpty) {
+      lineFromNodeToSpanLine() {
+        return node.lineFromNodeToSpanLine = LineElement()
+          ..setAttribute("x1", "$midPoint")
+          ..setAttribute("y1", "${y - 25}")
+          ..setAttribute("x2", "$midPoint")
+          ..setAttribute("y2", "${y - 25 / 2}")
+          ..setAttribute("stroke", "white");
+      }
+
+      childNodeSpanLine() {
+        return node.childNodeSpanLine = LineElement()
+          ..setAttribute("x1", "$rowStart")
+          ..setAttribute("y1", "${y - 25 / 2}")
+          ..setAttribute("x2", "$rowEnd")
+          ..setAttribute("y2", "${y - 25 / 2}")
+          ..setAttribute("stroke", "red");
+      }
+
       if (node.laidOut) {
         // line down to connect to children
         if (!visibilityCheckOnly) {
-          node.lineFromNodeToSpanLine!
-            ..setAttribute("x1", "$midPoint")
-            ..setAttribute("y1", "${y - 25}")
-            ..setAttribute("x2", "$midPoint")
-            ..setAttribute("y2", "${y - 25 / 2}");
+          if (node.lineFromNodeToSpanLine != null) {
+            node.lineFromNodeToSpanLine!
+              ..setAttribute("x1", "$midPoint")
+              ..setAttribute("y1", "${y - 25}")
+              ..setAttribute("x2", "$midPoint")
+              ..setAttribute("y2", "${y - 25 / 2}");
+          }
         }
 
-        updateElement(node.lineFromNodeToSpanLine!, midPoint, y - 25, midPoint, y - 25 ~/ 2);
+        updateElement(node.lineFromNodeToSpanLine, midPoint, y - 25, midPoint, y - 25 ~/ 2, lineFromNodeToSpanLine);
 
         // line from the top of the first child to the last child
-        if (node.childNodeSpanLine != null) {
-          if (!visibilityCheckOnly) {
+        if (!visibilityCheckOnly) {
+          if (node.childNodeSpanLine != null) {
             node.childNodeSpanLine!
               ..setAttribute("x1", "$rowStart")
               ..setAttribute("y1", "${y - 25 / 2}")
               ..setAttribute("x2", "$rowEnd")
               ..setAttribute("y2", "${y - 25 / 2}");
           }
+        }
 
-          updateElement(node.childNodeSpanLine!, rowStart, y - 25 ~/ 2, rowEnd, y - 25 ~/ 2);
+        if (rowStart != -1 && rowEnd != -1) {
+          updateElement(node.childNodeSpanLine, rowStart, y - 25 ~/ 2, rowEnd, y - 25 ~/ 2, childNodeSpanLine);
         }
       } else {
         // line down to connect to children
-        updateElement(
-            node.lineFromNodeToSpanLine = LineElement()
-              ..setAttribute("x1", "$midPoint")
-              ..setAttribute("y1", "${y - 25}")
-              ..setAttribute("x2", "$midPoint")
-              ..setAttribute("y2", "${y - 25 / 2}")
-              ..setAttribute("stroke", "white"),
-            midPoint,
-            y - 25,
-            midPoint,
-            (y - 25 / 2).toInt());
+        updateElement(null, midPoint, y - 25, midPoint, (y - 25 / 2).toInt(), lineFromNodeToSpanLine);
         // line from the top of the first child to the last child
         if (rowStart != -1 && rowEnd != -1) {
-          updateElement(
-              node.childNodeSpanLine = LineElement()
-                ..setAttribute("x1", "$rowStart")
-                ..setAttribute("y1", "${y - 25 / 2}")
-                ..setAttribute("x2", "$rowEnd")
-                ..setAttribute("y2", "${y - 25 / 2}")
-                ..setAttribute("stroke", "red"),
-              rowStart,
-              (y - 25 / 2).toInt(),
-              rowEnd,
-              (y - 25 / 2).toInt());
+          updateElement(null, rowStart, (y - 25 / 2).toInt(), rowEnd, (y - 25 / 2).toInt(), childNodeSpanLine);
         }
       }
     }
