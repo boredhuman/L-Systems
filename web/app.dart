@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:html';
+import 'dart:math';
 import 'dart:svg';
 
+import 'production_rule.dart';
 import 'tree_node.dart';
 import 'tree_renderer.dart';
 import 'turtle_option.dart';
@@ -10,32 +12,22 @@ import 'turtle_renderer.dart';
 class App {
   late Element svgContainer;
   late TreeRenderer treeRenderer;
+  TreeNode root = TreeNode("");
+  int iterations = 0;
+  CanvasElement canvas = CanvasElement();
+  late TurtleRenderer turtleRenderer = TurtleRenderer(canvas);
 
   App() {
-    TreeNode root = TreeNode("");
-    int iterations = 0;
     int prevMouseX = 0;
     int prevMouseY = 0;
     bool dragging = false;
-    CanvasElement canvas = CanvasElement();
-    TurtleRenderer turtleRenderer = TurtleRenderer(canvas);
 
     document.body!
       ..style.setProperty("display", "flex")
       ..children.addAll([
         // l system configurations
         DivElement()
-          ..style.setProperty("z-index", "1")
-          ..style.setProperty("width", "400px")
-          ..style.setProperty("background-color", "#222222")
-          ..style.setProperty("height", "100%")
-          ..style.setProperty("display", "flex")
-          ..style.setProperty("justify-content", "center")
-          ..style.setProperty("align-items", "center")
-          ..style.setProperty("text-align", "center")
-          ..style.setProperty("color", "white")
-          ..style.setProperty("padding", "0 5px")
-          ..style.setProperty("overflow", "auto")
+          ..classes.addAll(["leftBar"])
           ..children.addAll([
             DivElement()
               ..style.setProperty("width", "100%")
@@ -47,15 +39,15 @@ class App {
                   ..placeholder = "axiom"
                   ..style.setProperty("margin", "auto")
                   ..style.setProperty("text-align", "center"),
-                createProductionRule("A", "AB"),
-                createProductionRule("B", "A"),
+                createProductionRule("A", "AB", null),
+                createProductionRule("B", "A", null),
                 ParagraphElement()
                   ..text = "Add Production Rule"
                   ..classes.addAll(["btn"])
                   ..onClick.listen((event) {
                     Element clicked = event.target as Element;
 
-                    clicked.parent!.insertBefore(createProductionRule(null, null), clicked);
+                    clicked.parent!.insertBefore(createProductionRule(null, null, null), clicked);
                   }),
                 DivElement()
                   ..style.setProperty("display", "flex")
@@ -88,6 +80,8 @@ class App {
                           (document.getElementById("canvasRenderer") as Element).style.setProperty("display", "none");
                           (document.getElementById("svgRenderer") as Element).style.removeProperty("display");
                         }
+
+                        reset(event);
                       })
                   ]),
                 DivElement()
@@ -105,7 +99,10 @@ class App {
                         (event.currentTarget! as Element)
                             .parent!
                             .insertBefore(createTurtleConfigRow("Forward", "F", 1), event.currentTarget as Element);
-                      })
+                      }),
+                    createSlider("X Rot:", "xRot"),
+                    createSlider("Y Rot:", "yRot"),
+                    createSlider("Z Rot:", "zRot")
                   ]),
                 // current generation display and step size configuration
                 DivElement()
@@ -146,7 +143,7 @@ class App {
                   ..text = "Step"
                   ..classes.addAll(["btn"])
                   ..onClick.listen((event) {
-                    Map<String, String> productionRulesMap = getProductionRulesMap();
+                    Map<String, ProductionRule> productionRulesMap = getProductionRulesMap();
 
                     String? axiom = getAxiom();
 
@@ -192,22 +189,16 @@ class App {
                 ParagraphElement()
                   ..text = "Reset"
                   ..classes.addAll(["btn"])
-                  ..onClick.listen((event) {
-                    InputElement axiomElement = document.getElementById("axiom") as InputElement;
-                    root = TreeNode(axiomElement.value!);
-                    iterations = 0;
-                    setCurrentGeneration(iterations);
-
-                    svgContainer.children.clear();
-                    treeRenderer.layoutTreeNodeInit(TreeNode("")..children.add(root), 50);
-                  }),
+                  ..onClick.listen(reset),
                 ParagraphElement()
                   ..text = "Save Project"
                   ..classes.addAll(["btn"])
                   ..onClick.listen((event) {
                     Map<String, dynamic> saveData = {};
                     saveData["axiom"] = getAxiom();
-                    saveData["productionRules"] = getProductionRulesMap();
+                    saveData["productionRules"] = getProductionRulesMap().map((key, value) => MapEntry(key, {
+                          "pairs": value.pairs.map((e) => {"key": e.key, "value": e.value}).toList()
+                        }));
                     saveData["turtleData"] = getTurtleConfig()
                         .map((key, value) => MapEntry(key, {"value": value.value, "command": value.command, "symbol": value.symbol}));
                     String saveDataText = JsonEncoder().convert(saveData);
@@ -246,7 +237,13 @@ class App {
                           axiomElement.value = json["axiom"];
 
                           for (MapEntry<dynamic, dynamic> rule in productionRulesMap.entries) {
-                            axiomElement.parent!.insertBefore(createProductionRule(rule.key, rule.value), axiomElement.nextNode!);
+                            String lhs = rule.key;
+                            List<dynamic> pairs = rule.value["pairs"];
+                            for (dynamic pair in pairs) {
+                              String rhs = pair["key"];
+                              dynamic probability = pair["value"].toString();
+                              axiomElement.parent!.insertBefore(createProductionRule(lhs, rhs, probability), axiomElement.nextNode!);
+                            }
                           }
 
                           Element turtleConfigElement = document.getElementById("turtle config")!;
@@ -270,7 +267,7 @@ class App {
               dragging = true;
               prevMouseX = event.client.x.toInt();
               prevMouseY = event.client.y.toInt();
-              document.body?.style.setProperty("user-select", "none");
+              disableTextHighlight();
             }
           })
           ..onMouseMove.listen((event) {
@@ -336,7 +333,7 @@ class App {
     document.body!.onMouseUp.listen((event) {
       dragging = false;
       turtleRenderer.dragging = false;
-      document.body?.style.removeProperty("user-select");
+      enableTextHighlight();
     });
 
     treeRenderer = TreeRenderer(svgContainer);
@@ -348,8 +345,11 @@ class App {
 
     for (Node turtleOptionElement in turtleOptions) {
       if (turtleOptionElement is Element) {
+        // command such as move forward, turn left, turn right
         String command = (turtleOptionElement.children[0] as SelectElement).value!;
+        // the lhs of the production rule
         String symbol = (turtleOptionElement.children[1] as InputElement).value!;
+        // the rhs of the production rule
         String value = (turtleOptionElement.children[2] as InputElement).value!;
 
         TurtleOption turtleOption = TurtleOption(command, symbol, double.parse(value));
@@ -359,6 +359,21 @@ class App {
     }
 
     return turtleOptionsMap;
+  }
+
+  void reset(event) {
+    String renderMode = (document.getElementById("renderMode") as SelectElement).value!;
+    InputElement axiomElement = document.getElementById("axiom") as InputElement;
+    root = TreeNode(axiomElement.value!);
+    iterations = 0;
+    setCurrentGeneration(iterations);
+
+    if (renderMode == "Turtle") {
+      turtleRenderer.render(getElementsAtDepth(root, iterations, 0), getTurtleConfig());
+    } else {
+      svgContainer.children.clear();
+      treeRenderer.layoutTreeNodeInit(TreeNode("")..children.add(root), 50);
+    }
   }
 
   // for creating a row for the turtle configuration
@@ -420,15 +435,15 @@ class App {
     }
   }
 
-  void applyProductionRulesToNode(Map<String, String> productionRulesMap, TreeNode node) {
+  void applyProductionRulesToNode(Map<String, ProductionRule> productionRulesMap, TreeNode node) {
     String string = node.value;
     // iterate over each character cna check if there is production rule for it
     // todo potentially add support for production rules longer than a single character
     for (int i = 0; i < string.length; i++) {
-      String? rhs = productionRulesMap[string[i]];
+      ProductionRule? rhs = productionRulesMap[string[i]];
 
       if (rhs != null) {
-        node.addNode(TreeNode(rhs));
+        node.addNode(TreeNode(rhs.getRhs()));
       } else {
         // symbol does not have a production rule so assume its a terminal and keep it
         node.addNode(TreeNode(string[i]));
@@ -446,7 +461,7 @@ class App {
     return stepSizeElement.valueAsNumber!.toInt();
   }
 
-  DivElement createProductionRule(String? lhs, String? rhs) {
+  DivElement createProductionRule(String? lhs, String? rhs, String? probability) {
     return DivElement()
       // pr = production rule
       ..classes.addAll(["pr"])
@@ -454,20 +469,30 @@ class App {
       ..style.setProperty("display", "flex")
       ..style.setProperty("height", "25px")
       ..children.addAll([
+        // lhs
         InputElement()
           ..classes.addAll(["lhs"])
           ..style.setProperty("width", "30px")
           // max length as all productions rules must be context free
           ..setAttribute("maxlength", "1")
+          ..style.setProperty("text-align", "center")
           ..value = lhs,
         ParagraphElement()
           ..text = "->"
           ..style.setProperty("margin", "0"),
+        // rhs
         InputElement()
           ..classes.addAll(["rhs"])
           ..style.setProperty("width", "10px")
           ..style.setProperty("flex", "1")
           ..value = rhs,
+        // probability
+        InputElement()
+          ..classes.addAll(["prob"])
+          ..style.setProperty("width", "50px")
+          ..style.setProperty("margin", "0 5px")
+          ..style.setProperty("text-align", "center")
+          ..value = probability ?? "100",
         SpanElement()
           ..classes.addAll(["material-symbols-outlined"])
           ..text = "close"
@@ -477,28 +502,115 @@ class App {
       ]);
   }
 
-  Map<String, String> getProductionRulesMap() {
+  Map<String, ProductionRule> getProductionRulesMap() {
     List<Node> productionRules = document.getElementsByClassName("pr");
-    Map<String, String> productionRulesMap = {};
+    Map<String, ProductionRule> productionRulesMap = {};
 
     for (Node node in productionRules) {
       if (node is Element) {
-        List<Node> lhs = node.getElementsByClassName("lhs");
-        List<Node> rhs = node.getElementsByClassName("rhs");
+        Node lhs = node.getElementsByClassName("lhs").first;
+        Node rhs = node.getElementsByClassName("rhs").first;
+        Node prob = node.getElementsByClassName("prob").first;
 
-        if (lhs.isNotEmpty && lhs[0] is InputElement && rhs.isNotEmpty && rhs[0] is InputElement) {
-          InputElement lhsElement = lhs[0] as InputElement;
-          InputElement rhsElement = rhs[0] as InputElement;
-          String? lhsText = lhsElement.value;
-          String? rhsText = rhsElement.value;
+        if (lhs is InputElement && rhs is InputElement && prob is InputElement) {
+          String? lhsText = lhs.value;
+          String rhsText = rhs.value ?? "";
+          double probability = prob.value != null ? double.parse(prob.value!) : 0;
 
           if (lhsText != null) {
-            productionRulesMap[lhsText] = rhsText ?? "";
+            ProductionRule? productionRule = productionRulesMap[lhsText];
+            if (productionRule == null) {
+              productionRule = ProductionRule();
+              productionRulesMap[lhsText] = productionRule;
+            }
+            productionRule.addRHS(rhsText, probability);
           }
         }
       }
     }
+
+    for (ProductionRule productionRule in productionRulesMap.values) {
+      productionRule.done();
+    }
+
     return productionRulesMap;
+  }
+
+  Element createSlider(String prefix, String id) {
+    bool dragging = false;
+    late DivElement filler;
+    late DivElement background;
+    late ParagraphElement text;
+
+    document
+      ..onMouseUp.listen((event) {
+        if (dragging) {
+          enableTextHighlight();
+        }
+        dragging = false;
+      })
+      ..onMouseMove.listen((event) {
+        if (dragging) {
+          int x = event.client.x.toInt();
+
+          Rectangle<num> rect = background.getBoundingClientRect();
+          int left = rect.left.toInt() + 10;
+          int width = rect.width.toInt() - 20;
+          double offset = min(max((x - left) / width, 0), 1) * 100;
+          filler.style.setProperty("transform", "translate($offset%, 0)");
+          double xRot = -180 + (180 - -180) * (offset / 100);
+          text.text = xRot.toStringAsFixed(1);
+          turtleRenderer.renderInternal();
+        }
+      });
+
+    // top div for padding
+    return DivElement()
+      ..style.setProperty("margin", "10px 0")
+      // background of slider
+      ..children.add(background = DivElement()
+        ..style.setProperty("background-color", "#333333")
+        ..style.setProperty("border-radius", "5px")
+        ..onMouseDown.listen((event) {
+          dragging = true;
+          disableTextHighlight();
+        })
+        ..children.add(DivElement()
+          ..style.setProperty("position", "relative")
+          ..style.setProperty("width", "100%")
+          ..style.setProperty("height", "0")
+          ..style.setProperty("display", "flex")
+          ..style.setProperty("justify-content", "center")
+          ..children.addAll([
+            ParagraphElement()
+              ..text = prefix
+              ..style.setProperty("margin", "0"),
+            text = ParagraphElement()
+              ..id = id
+              ..text = "0"
+              ..style.setProperty("margin", "0")
+              ..style.setProperty("text-align", "center")
+          ])
+          ..style.setProperty("z-index", "100"))
+        // filler div for translation
+        ..children.add(DivElement()
+          ..children.add(filler = DivElement()
+            ..style.setProperty("transform", "translate(50%, 0)")
+            ..style.setProperty("margin", "0 10px")
+            ..children.add(DivElement()
+              ..style.setProperty("width", "20px")
+              ..style.setProperty("height", "20px")
+              ..style.setProperty("transform", "translate(-50%, 0)")
+              ..style.setProperty("background-color", "#444444")
+              ..style.setProperty("border-radius", "5px")))));
+  }
+
+  void disableTextHighlight() {
+    document.body?.style.setProperty("user-select", "none");
+  }
+
+  void enableTextHighlight() {
+    document.body?.style.removeProperty("user-select");
   }
 
   String? getAxiom() {

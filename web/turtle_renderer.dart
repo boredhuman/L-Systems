@@ -1,5 +1,4 @@
 import 'dart:html';
-import 'dart:js_util';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:web_gl';
@@ -87,16 +86,15 @@ class TurtleRenderer {
     List<double> buffer = treeNodesToVertexData(data, turtleOptions);
     vertexCount = buffer.length ~/ 7;
     print("vertexCount $vertexCount");
-    print(buffer);
 
     buffer.addAll([
-      // y axis
+      // y axis red
       0, 0, 0, 1, 0, 0, 1,
       0, 10, 0, 1, 0, 0, 1,
-      // x axis
+      // x axis green
       0, 0, 0, 0, 1, 0, 1,
       10, 0, 0, 0, 1, 0, 1,
-      // z axis
+      // z axis blue
       0, 0, 0, 0, 0, 1, 1,
       0, 0, 10, 0, 0, 1, 1,
     ]);
@@ -107,7 +105,7 @@ class TurtleRenderer {
   }
 
   // call this to render, it will use data previously given
-  renderInternal() {
+  void renderInternal() {
     int actualWidth = canvas.getBoundingClientRect().width.toInt();
     int actualHeight = canvas.getBoundingClientRect().height.toInt();
     // canvas has been changed. Resize to keep 1:1 scaling
@@ -122,11 +120,18 @@ class TurtleRenderer {
     UniformLocation transformMatrixUniformLocation = gl.getUniformLocation(lineProgram, "transformMatrix");
 
     Matrix4 matrix4 = Matrix4.identity();
+    matrix4.translate(this.xRot, -this.yRot);
     matrix4.scale(scale, scale, scale);
+    double xRot = double.parse((document.getElementById("xRot") as ParagraphElement).text!);
+    double yRot = double.parse((document.getElementById("yRot") as ParagraphElement).text!);
+    double zRot = double.parse((document.getElementById("zRot") as ParagraphElement).text!);
     // rotate around the y axis
-    matrix4.rotateY(xRot * pi / 180);
+    matrix4.rotateY(yRot * pi / 180);
     // rotate around the x axis
-    matrix4.rotateX(yRot * pi / 180);
+    matrix4.rotateX(xRot * pi / 180);
+    // rotate around the z axis
+    matrix4.rotateZ(zRot * pi / 180);
+
     gl.uniformMatrix4fv(transformMatrixUniformLocation, false, matrix4.storage);
 
     gl.drawArrays(WebGL.LINE_STRIP, 0, vertexCount);
@@ -195,8 +200,8 @@ class TurtleRenderer {
       int xDelta = currentX - prevX;
       int yDelta = currentY - prevY;
 
-      xRot += xDelta;
-      yRot += yDelta;
+      xRot += xDelta / 1000;
+      yRot += yDelta / 1000;
 
       prevX = currentX;
       prevY = currentY;
@@ -208,8 +213,12 @@ class TurtleRenderer {
   onMouseWheelEvent(WheelEvent event) {
     if (event.deltaY > 0) {
       scale *= 0.5;
+      xRot *= 0.5;
+      yRot *= 0.5;
     } else {
       scale *= 2;
+      xRot *= 2;
+      yRot *= 2;
     }
     renderInternal();
   }

@@ -8,6 +8,20 @@ html, body {
     font-family: 'Roboto', sans-serif;
 }
 
+.leftBar {
+    z-index: 1;
+    width: 400px;
+    background-color: #222222;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    color: white;
+    padding: 0 5px;
+    overflow: auto;
+}
+
 input {
     outline: none;
     background-color: #333333;
