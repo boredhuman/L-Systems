@@ -4,6 +4,8 @@ import 'dart:math';
 import 'dart:svg';
 
 import 'production_rule.dart';
+import 'save_load.dart';
+import 'string_view.dart';
 import 'tree_node.dart';
 import 'tree_renderer.dart';
 import 'turtle_option.dart';
@@ -16,6 +18,7 @@ class App {
   int iterations = 0;
   CanvasElement canvas = CanvasElement();
   late TurtleRenderer turtleRenderer = TurtleRenderer(canvas);
+  int nodeCount = 0;
 
   App() {
     int prevMouseX = 0;
@@ -38,7 +41,8 @@ class App {
                   ..value = "A"
                   ..placeholder = "axiom"
                   ..style.setProperty("margin", "auto")
-                  ..style.setProperty("text-align", "center"),
+                  ..style.setProperty("text-align", "center")
+                  ..style.setProperty("border-radius", "5px"),
                 createProductionRule("A", "AB", null),
                 createProductionRule("B", "A", null),
                 ParagraphElement()
@@ -106,29 +110,24 @@ class App {
                   ]),
                 // current generation display and step size configuration
                 DivElement()
-                  ..style.setProperty("display", "flex")
-                  ..style.setProperty("align-items", "center")
-                  ..style.setProperty("justify-content", "space-between")
-                  ..style.setProperty("height", "30px")
+                  ..classes.add("spacedRow")
                   ..children.addAll([
                     ParagraphElement()
                       ..style.setProperty("margin", "0")
-                      ..text = "Current Generation :"
+                      ..text = "Current Generation"
                       ..style.setProperty("white-space", "nowrap"),
                     ParagraphElement()
                       ..id = "currentGeneration"
                       ..text = "0"
                       ..style.setProperty("margin", "0 1px"),
                   ]),
+                // step size
                 DivElement()
-                  ..style.setProperty("display", "flex")
-                  ..style.setProperty("justify-content", "space-between")
-                  ..style.setProperty("align-items", "center")
-                  ..style.setProperty("height", "30px")
+                  ..classes.add("spacedRow")
                   ..children.addAll([
                     ParagraphElement()
                       ..style.setProperty("margin", "0")
-                      ..text = "Step Size:"
+                      ..text = "Step Size"
                       ..style.setProperty("white-space", "nowrap"),
                     InputElement()
                       ..id = "stepSize"
@@ -136,7 +135,19 @@ class App {
                       ..setAttribute("min", "1")
                       ..style.setProperty("width", "40px")
                       ..style.setProperty("margin", "0 1px")
+                      ..style.setProperty("text-align", "center")
                       ..value = "1"
+                  ]),
+                DivElement()
+                  ..classes.add("spacedRow")
+                  ..children.addAll([
+                    ParagraphElement()
+                      ..style.setProperty("margin", "0")
+                      ..text = "Node Count"
+                      ..style.setProperty("white-space", "nowrap"),
+                    ParagraphElement()
+                      ..id = "nodeCount"
+                      ..text = 0.toString()
                   ]),
                 // step button
                 ParagraphElement()
@@ -168,9 +179,10 @@ class App {
                     for (int i = 0; i < stepSize; i += 1) {
                       List<TreeNode> nodes = getElementsAtDepth(root, iterations, 0);
 
-                      for (var node in nodes) {
-                        applyProductionRulesToNode(productionRulesMap, node);
-                      }
+                      // for (var node in nodes) {
+                      //   applyProductionRulesToNode(productionRulesMap, node);
+                      // }
+                      applyProductionRulesToNode(productionRulesMap, StringView(nodes));
 
                       iterations += 1;
                       setCurrentGeneration(iterations);
@@ -185,6 +197,8 @@ class App {
                       // svgContainer.children.clear();
                       treeRenderer.layoutTreeNodeInit(TreeNode("")..children.add(root), 50);
                     }
+                    ParagraphElement nodeCount = document.getElementById("nodeCount") as ParagraphElement;
+                    nodeCount.text = this.nodeCount.toString();
                   }),
                 ParagraphElement()
                   ..text = "Reset"
@@ -193,69 +207,10 @@ class App {
                 ParagraphElement()
                   ..text = "Save Project"
                   ..classes.addAll(["btn"])
-                  ..onClick.listen((event) {
-                    Map<String, dynamic> saveData = {};
-                    saveData["axiom"] = getAxiom();
-                    saveData["productionRules"] = getProductionRulesMap().map((key, value) => MapEntry(key, {
-                          "pairs": value.pairs.map((e) => {"key": e.key, "value": e.value}).toList()
-                        }));
-                    saveData["turtleData"] = getTurtleConfig()
-                        .map((key, value) => MapEntry(key, {"value": value.value, "command": value.command, "symbol": value.symbol}));
-                    String saveDataText = JsonEncoder().convert(saveData);
-
-                    Element tempElement = document.createElement('a');
-                    tempElement.setAttribute('href', "data:text/plain;charset=utf-8,${Uri.encodeComponent(saveDataText)}");
-                    tempElement.setAttribute('download', "l-system.json");
-
-                    tempElement.style.display = 'none';
-                    document.body!.children.add(tempElement);
-
-                    tempElement.click();
-
-                    tempElement.remove();
-                  }),
+                  ..onClick.listen(SaveLoad.save),
                 InputElement(type: "file")
                   ..style.setProperty("width", "100%")
-                  ..onChange.listen((event) {
-                    InputElement self = event.target as InputElement;
-                    if (self.files != null && self.files!.isNotEmpty) {
-                      File file = self.files![0];
-                      Blob blob = file.slice(0, file.size);
-                      FileReader()
-                        ..readAsText(blob)
-                        ..onLoadEnd.listen((event) {
-                          String jsonData = (event.target as FileReader).result as String;
-
-                          Map<String, dynamic> json = jsonDecode(jsonData);
-
-                          // symbol then field and value for turtleOption
-                          Map<dynamic, dynamic> turtleData = json["turtleData"];
-                          Map<dynamic, dynamic> productionRulesMap = json["productionRules"];
-
-                          InputElement axiomElement = document.getElementById("axiom") as InputElement;
-
-                          axiomElement.value = json["axiom"];
-
-                          for (MapEntry<dynamic, dynamic> rule in productionRulesMap.entries) {
-                            String lhs = rule.key;
-                            List<dynamic> pairs = rule.value["pairs"];
-                            for (dynamic pair in pairs) {
-                              String rhs = pair["key"];
-                              dynamic probability = pair["value"].toString();
-                              axiomElement.parent!.insertBefore(createProductionRule(lhs, rhs, probability), axiomElement.nextNode!);
-                            }
-                          }
-
-                          Element turtleConfigElement = document.getElementById("turtle config")!;
-
-                          for (MapEntry<dynamic, dynamic> turtleConfigEntry in turtleData.entries) {
-                            Map<dynamic, dynamic> turtleConfig = turtleConfigEntry.value;
-                            turtleConfigElement.children
-                                .add(createTurtleConfigRow(turtleConfig["command"]!, turtleConfig["symbol"]!, turtleConfig["value"]!));
-                          }
-                        });
-                    }
-                  }),
+                  ..onChange.listen(SaveLoad.load),
               ])
           ]),
         // l system rendering
@@ -297,6 +252,10 @@ class App {
 
                 prevMouseX = event.client.x.toInt();
                 prevMouseY = event.client.y.toInt();
+
+                if (iterations == 0) {
+                  return;
+                }
 
                 treeRenderer.layoutTreeNodeInit(TreeNode("")..children.add(root), 50, true);
               }
@@ -366,8 +325,11 @@ class App {
     InputElement axiomElement = document.getElementById("axiom") as InputElement;
     root = TreeNode(axiomElement.value!);
     iterations = 0;
+    this.nodeCount = 0;
     setCurrentGeneration(iterations);
 
+    ParagraphElement nodeCount = document.getElementById("nodeCount") as ParagraphElement;
+    nodeCount.text = this.nodeCount.toString();
     if (renderMode == "Turtle") {
       turtleRenderer.render(getElementsAtDepth(root, iterations, 0), getTurtleConfig());
     } else {
@@ -435,19 +397,88 @@ class App {
     }
   }
 
-  void applyProductionRulesToNode(Map<String, ProductionRule> productionRulesMap, TreeNode node) {
-    String string = node.value;
-    // iterate over each character cna check if there is production rule for it
-    // todo potentially add support for production rules longer than a single character
-    for (int i = 0; i < string.length; i++) {
-      ProductionRule? rhs = productionRulesMap[string[i]];
-
-      if (rhs != null) {
-        node.addNode(TreeNode(rhs.getRhs()));
-      } else {
-        // symbol does not have a production rule so assume its a terminal and keep it
-        node.addNode(TreeNode(string[i]));
+  void applyProductionRulesToNode(Map<String, ProductionRule> productionRulesMap, StringView stringView) {
+    bool hasLengthTwoLHS = false;
+    bool hasLengthThreeLHS = false;
+    productionRulesMap.entries.toList().forEach((element) {
+      if (element.key.length == 2) {
+        hasLengthTwoLHS = true;
+      } else if (element.key.length == 3) {
+        hasLengthThreeLHS = true;
       }
+    });
+
+    List<bool> mappedChars = List.filled(stringView.totalLength, false);
+    // iterate over each character cna check if there is production rule for it
+    String? symbol;
+    int index = 0;
+    while ((symbol = stringView.nextSymbol()) != null) {
+      ProductionRule? rhs = productionRulesMap[symbol];
+      bool applied = false;
+      if (rhs != null) {
+        stringView.currentNode.addNode(TreeNode(rhs.getRhs()));
+        nodeCount++;
+        mappedChars[index] = true;
+        applied = true;
+      }
+
+      String? nextSymbol = stringView.peakNext();
+      if (hasLengthTwoLHS && nextSymbol != null) {
+        String substring = symbol! + nextSymbol;
+        rhs = productionRulesMap[substring];
+
+        if (rhs != null) {
+          if (rhs.type == "CS") {
+            // context sensitive
+            // sensitive part is on the left
+            if (rhs.midIndex == 1) {
+              stringView.peakNextSymbolNode()!.addNode(TreeNode(rhs.getRhs()));
+              nodeCount++;
+              mappedChars[index + 1] = true;
+            } else {
+              // sensitive is on the right
+              stringView.currentNode.addNode(TreeNode(rhs.getRhs()));
+              nodeCount++;
+              mappedChars[index] = true;
+              applied = true;
+            }
+          } else {
+            stringView.currentNode.addNode(TreeNode(rhs.getRhs()));
+            nodeCount++;
+            mappedChars[index] = true;
+            mappedChars[index + 1] = true;
+            applied = true;
+          }
+        }
+      }
+
+      String? nextDoubleSymbol = stringView.peakDouble();
+      if (hasLengthThreeLHS && nextDoubleSymbol != null) {
+        String substring = symbol! + nextSymbol! + nextDoubleSymbol;
+        rhs = productionRulesMap[substring];
+
+        if (rhs != null) {
+          if (rhs.type == "CS") {
+            stringView.peakNextSymbolNode()!.addNode(TreeNode(rhs.getRhs()));
+            nodeCount++;
+            mappedChars[index + 1] = true;
+          } else {
+            stringView.currentNode.addNode(TreeNode(rhs.getRhs()));
+            nodeCount++;
+            mappedChars[index] = true;
+            mappedChars[index + 1] = true;
+            mappedChars[index + 2] = true;
+            applied = true;
+          }
+        }
+      }
+
+      // no mapping for this sub set of symbols so assume its a terminal and keep it
+      if (!applied && !mappedChars[index]) {
+        stringView.currentNode.addNode(TreeNode(symbol!));
+        nodeCount++;
+      }
+      index++;
     }
   }
 
@@ -461,7 +492,7 @@ class App {
     return stepSizeElement.valueAsNumber!.toInt();
   }
 
-  DivElement createProductionRule(String? lhs, String? rhs, String? probability) {
+  DivElement createProductionRule(String? lhs, String? rhs, String? probability, {String? left, String? right}) {
     return DivElement()
       // pr = production rule
       ..classes.addAll(["pr"])
@@ -469,14 +500,40 @@ class App {
       ..style.setProperty("display", "flex")
       ..style.setProperty("height", "25px")
       ..children.addAll([
+        SelectElement()
+          ..classes.add("type")
+          ..style.setProperty("margin-right", "5px")
+          ..children.addAll([
+            OptionElement()
+              ..setAttribute("value", "CS")
+              ..text = "CS",
+            OptionElement()
+              ..setAttribute("value", "NCF")
+              ..text = "NCF"
+          ]),
         // lhs
         InputElement()
-          ..classes.addAll(["lhs"])
-          ..style.setProperty("width", "30px")
-          // max length as all productions rules must be context free
+          ..classes.addAll(["lhsLeft"])
+          ..style.setProperty("width", "20px")
           ..setAttribute("maxlength", "1")
           ..style.setProperty("text-align", "center")
+          ..style.setProperty("border-radius", "5px")
+          ..value = left,
+        InputElement()
+          ..classes.addAll(["lhs"])
+          ..style.setProperty("width", "20px")
+          ..setAttribute("maxlength", "1")
+          ..style.setProperty("text-align", "center")
+          ..style.setProperty("border-radius", "5px")
+          ..style.setProperty("margin", "0 2px")
           ..value = lhs,
+        InputElement()
+          ..classes.addAll(["lhsRight"])
+          ..style.setProperty("width", "20px")
+          ..setAttribute("maxlength", "1")
+          ..style.setProperty("text-align", "center")
+          ..style.setProperty("border-radius", "5px")
+          ..value = right,
         ParagraphElement()
           ..text = "->"
           ..style.setProperty("margin", "0"),
@@ -485,6 +542,8 @@ class App {
           ..classes.addAll(["rhs"])
           ..style.setProperty("width", "10px")
           ..style.setProperty("flex", "1")
+          ..style.setProperty("border-radius", "5px")
+          ..style.setProperty("text-align", "center")
           ..value = rhs,
         // probability
         InputElement()
@@ -492,6 +551,7 @@ class App {
           ..style.setProperty("width", "50px")
           ..style.setProperty("margin", "0 5px")
           ..style.setProperty("text-align", "center")
+          ..style.setProperty("border-radius", "5px")
           ..value = probability ?? "100",
         SpanElement()
           ..classes.addAll(["material-symbols-outlined"])
@@ -508,23 +568,28 @@ class App {
 
     for (Node node in productionRules) {
       if (node is Element) {
-        Node lhs = node.getElementsByClassName("lhs").first;
-        Node rhs = node.getElementsByClassName("rhs").first;
-        Node prob = node.getElementsByClassName("prob").first;
+        InputElement lhs = node.getElementsByClassName("lhs").first as InputElement;
+        InputElement lhsLeft = node.getElementsByClassName("lhsLeft").first as InputElement;
+        InputElement lhsRight = node.getElementsByClassName("lhsRight").first as InputElement;
+        InputElement rhs = node.getElementsByClassName("rhs").first as InputElement;
+        InputElement prob = node.getElementsByClassName("prob").first as InputElement;
+        SelectElement type = node.getElementsByClassName("type").first as SelectElement;
 
-        if (lhs is InputElement && rhs is InputElement && prob is InputElement) {
-          String? lhsText = lhs.value;
-          String rhsText = rhs.value ?? "";
-          double probability = prob.value != null ? double.parse(prob.value!) : 0;
+        String? lhsText = "${lhsLeft.value}${lhs.value}${lhsRight.value}";
+        String rhsText = rhs.value ?? "";
+        double probability = prob.value != null ? double.parse(prob.value!) : 0;
 
-          if (lhsText != null) {
-            ProductionRule? productionRule = productionRulesMap[lhsText];
-            if (productionRule == null) {
-              productionRule = ProductionRule();
-              productionRulesMap[lhsText] = productionRule;
+        if (lhsText.isNotEmpty) {
+          ProductionRule? productionRule = productionRulesMap[lhsText];
+          if (productionRule == null) {
+            int midIndex = lhsLeft.value != null && lhsRight.value != null ? 1 : 0;
+            if (midIndex == 0 && lhsLeft.value != null)  {
+              midIndex = 1;
             }
-            productionRule.addRHS(rhsText, probability);
+            productionRule = ProductionRule(type.value!, midIndex);
+            productionRulesMap[lhsText] = productionRule;
           }
+          productionRule.addRHS(rhsText, probability);
         }
       }
     }

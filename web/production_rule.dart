@@ -4,8 +4,10 @@ class ProductionRule {
   List<MapEntry<String, double>> pairs = [];
   double sum = 0;
   Random random = Random();
+  String type;
+  int midIndex;
 
-  ProductionRule();
+  ProductionRule(this.type, this.midIndex);
 
   void addRHS(String rhs, double probability) {
     pairs.add(MapEntry(rhs, probability));
