@@ -13,13 +13,11 @@ html, body {
     width: 400px;
     background-color: #222222;
     height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
     text-align: center;
     color: white;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: 0 5px;
-    overflow: auto;
 }
 
 input {

@@ -13,34 +13,41 @@ class SaveLoad {
         ..readAsText(blob)
         ..onLoadEnd.listen((event) {
           String jsonData = (event.target as FileReader).result as String;
-
-          Map<String, dynamic> json = jsonDecode(jsonData);
-
-          // symbol then field and value for turtleOption
-          Map<dynamic, dynamic> turtleData = json["turtleData"];
-          Map<dynamic, dynamic> productionRulesMap = json["productionRules"];
-
-          InputElement axiomElement = document.getElementById("axiom") as InputElement;
-
-          axiomElement.value = json["axiom"];
-
-          for (MapEntry<dynamic, dynamic> rule in productionRulesMap.entries) {
-            String lhs = rule.key;
-            List<dynamic> pairs = rule.value["pairs"];
-            for (dynamic pair in pairs) {
-              String rhs = pair["key"];
-              dynamic probability = pair["value"].toString();
-              axiomElement.parent!.insertBefore(app.createProductionRule(lhs, rhs, probability), axiomElement.nextNode!);
-            }
-          }
-
-          Element turtleConfigElement = document.getElementById("turtle config")!;
-
-          for (MapEntry<dynamic, dynamic> turtleConfigEntry in turtleData.entries) {
-            Map<dynamic, dynamic> turtleConfig = turtleConfigEntry.value;
-            turtleConfigElement.children.add(app.createTurtleConfigRow(turtleConfig["command"]!, turtleConfig["symbol"]!, turtleConfig["value"]!));
-          }
+          loadJson(jsonData);
         });
+    }
+  }
+
+  static loadJson(String jsonData) {
+    Map<String, dynamic> json = jsonDecode(jsonData);
+
+    // symbol then field and value for turtleOption
+    Map<dynamic, dynamic> turtleData = json["turtleData"];
+    Map<dynamic, dynamic> productionRulesMap = json["productionRules"];
+
+    InputElement axiomElement = document.getElementById("axiom") as InputElement;
+
+    axiomElement.value = json["axiom"];
+
+    for (MapEntry<dynamic, dynamic> rule in productionRulesMap.entries) {
+      String lhs = rule.key;
+      List<dynamic> pairs = rule.value["pairs"];
+      for (dynamic pair in pairs) {
+        String rhs = pair["key"];
+        dynamic probability = pair["value"].toString();
+        axiomElement.parent!.insertBefore(app.createProductionRule(lhs, rhs, probability), axiomElement.nextNode!);
+      }
+    }
+
+    Element turtleConfigElement = document.getElementById("turtle config")!;
+    Element addSymbolRowElement = document.getElementById("addSymbolRow")!;
+
+    for (MapEntry<dynamic, dynamic> turtleConfigEntry in turtleData.entries) {
+      List<dynamic> turtleConfigList = turtleConfigEntry.value;
+      for (Map<dynamic, dynamic> turtleConfig in turtleConfigList) {
+        Element turtleConfigRowElement = app.createTurtleConfigRow(turtleConfig["command"]!, turtleConfig["symbol"]!, turtleConfig["value"]!);
+        turtleConfigElement.insertBefore(turtleConfigRowElement, addSymbolRowElement);
+      }
     }
   }
 
@@ -50,8 +57,9 @@ class SaveLoad {
     saveData["productionRules"] = app.getProductionRulesMap().map((key, value) => MapEntry(key, {
           "pairs": value.pairs.map((e) => {"key": e.key, "value": e.value}).toList()
         }));
-    saveData["turtleData"] =
-        app.getTurtleConfig().map((key, value) => MapEntry(key, {"value": value.value, "command": value.command, "symbol": value.symbol}));
+    saveData["turtleData"] = app
+        .getTurtleConfig()
+        .map((key, value) => MapEntry(key, value.map((e) => {"value": e.value, "command": e.command, "symbol": e.symbol}).toList()));
     String saveDataText = JsonEncoder().convert(saveData);
 
     Element tempElement = document.createElement('a');

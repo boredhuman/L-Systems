@@ -3,6 +3,7 @@ import 'dart:html';
 import 'dart:math';
 import 'dart:svg';
 
+import 'fibo_word_frac.dart';
 import 'production_rule.dart';
 import 'save_load.dart';
 import 'string_view.dart';
@@ -34,17 +35,16 @@ class App {
           ..children.addAll([
             DivElement()
               ..style.setProperty("width", "100%")
-              ..style.setProperty("overflow", "hidden")
               ..children.addAll([
                 InputElement()
                   ..id = "axiom"
-                  ..value = "A"
+                  ..value = ""
                   ..placeholder = "axiom"
-                  ..style.setProperty("margin", "auto")
+                  ..style.setProperty("margin", "10px auto")
                   ..style.setProperty("text-align", "center")
                   ..style.setProperty("border-radius", "5px"),
-                createProductionRule("A", "AB", null),
-                createProductionRule("B", "A", null),
+                // createProductionRule("A", "AB", null),
+                // createProductionRule("B", "A", null),
                 ParagraphElement()
                   ..text = "Add Production Rule"
                   ..classes.addAll(["btn"])
@@ -93,10 +93,11 @@ class App {
                   ..text = "Turtle Symbol Map"
                   ..id = "turtle config"
                   ..children.addAll([
-                    createTurtleConfigRow("Forward", "F", 1),
-                    createTurtleConfigRow("Z Rotation", "-", -90),
-                    createTurtleConfigRow("Z Rotation", "+", 90),
+                    // createTurtleConfigRow("Forward", "F", 1),
+                    // createTurtleConfigRow("Z Rotation", "-", -90),
+                    // createTurtleConfigRow("Z Rotation", "+", 90),
                     ParagraphElement()
+                      ..id = "addSymbolRow"
                       ..text = "Add Symbol Row"
                       ..classes.addAll(["btn"])
                       ..onClick.listen((event) {
@@ -298,9 +299,9 @@ class App {
     treeRenderer = TreeRenderer(svgContainer);
   }
 
-  Map<String, TurtleOption> getTurtleConfig() {
+  Map<String, List<TurtleOption>> getTurtleConfig() {
     List<Node> turtleOptions = document.getElementsByClassName("turtleOption");
-    Map<String, TurtleOption> turtleOptionsMap = {};
+    Map<String, List<TurtleOption>> turtleOptionsMap = {};
 
     for (Node turtleOptionElement in turtleOptions) {
       if (turtleOptionElement is Element) {
@@ -313,7 +314,9 @@ class App {
 
         TurtleOption turtleOption = TurtleOption(command, symbol, double.parse(value));
 
-        turtleOptionsMap[symbol] = turtleOption;
+        List<TurtleOption>? options = turtleOptionsMap.putIfAbsent(symbol, () => []);
+
+        options.add(turtleOption);
       }
     }
 
@@ -342,6 +345,7 @@ class App {
   Element createTurtleConfigRow([String? command, String? symbol, int? amount]) {
     return DivElement()
       ..style.setProperty("display", "flex")
+      ..style.setProperty("margin-top", "5px")
       ..classes.addAll(["turtleOption"])
       ..children.addAll([
         SelectElement()
@@ -582,10 +586,13 @@ class App {
         if (lhsText.isNotEmpty) {
           ProductionRule? productionRule = productionRulesMap[lhsText];
           if (productionRule == null) {
-            int midIndex = lhsLeft.value != null && lhsRight.value != null ? 1 : 0;
-            if (midIndex == 0 && lhsLeft.value != null)  {
+            print(lhsText);
+            print(lhsLeft.value != null);
+            int midIndex = (lhsLeft.value != null && lhsLeft.value != "") && (lhsRight.value != null && lhsRight.value != "") ? 1 : 0;
+            if (midIndex == 0 && (lhsLeft.value != null && lhsLeft.value != ""))  {
               midIndex = 1;
             }
+            print(midIndex);
             productionRule = ProductionRule(type.value!, midIndex);
             productionRulesMap[lhsText] = productionRule;
           }

@@ -28,6 +28,7 @@ class StringView {
   }
 
   String? peakNext() {
+    // node string offset is already one greater than it was before when next symbol was called so don't need + 1
     if (nodeStringOffset < currentNode.value.length) {
       return currentNode.value[nodeStringOffset];
     } else {
@@ -56,14 +57,27 @@ class StringView {
     if (nodeStringOffset + 1 < currentNode.value.length) {
       return currentNode.value[nodeStringOffset + 1];
     } else {
+      // check if we can get symbol from neighbouring node
       if (treeNodeIndex + 1 < nodes.length) {
         TreeNode treeNode = nodes[treeNodeIndex + 1];
-        if (currentNode.value.length == 2) {
+        // we are gonna want the second symbol from this node if we are on the last symbol of the previous node
+        // otherwise if we aren't we are gonna want the first
+        // if we want the second symbol and the treeNode value length is less than 2 we have to get the first symbol from
+        // the next node
+
+        // true if we are on the last symbol of the previous node
+        // so we want two get the second symbol
+        if (nodeStringOffset == currentNode.value.length) {
+          if (treeNode.value.length > 1) {
+            return treeNode.value[1];
+          } else {
+            if (treeNodeIndex + 2 < nodes.length) {
+              return nodes[treeNodeIndex + 2].value[0];
+            }
+          }
+          // we want the first
+        } else {
           return treeNode.value[0];
-        } else if (treeNode.value.length > 1) {
-          return treeNode.value[1];
-        } else if (treeNodeIndex + 2 < nodes.length) {
-          return nodes[treeNodeIndex + 2].value[0];
         }
       }
       return null;

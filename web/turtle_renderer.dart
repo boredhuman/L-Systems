@@ -39,7 +39,7 @@ class TurtleRenderer {
     gl.shaderSource(fragmentShader, this.fragmentShader());
 
     gl.compileShader(vertexShader);
-    if(!(gl.getShaderParameter(fragmentShader, WebGL.COMPILE_STATUS) as bool)) {
+    if (!(gl.getShaderParameter(fragmentShader, WebGL.COMPILE_STATUS) as bool)) {
       String? vertexLog = gl.getShaderInfoLog(vertexShader);
       if (vertexLog != null && vertexLog.isNotEmpty) {
         print("failed to compile vertex shader $vertexLog.");
@@ -47,7 +47,7 @@ class TurtleRenderer {
     }
 
     gl.compileShader(fragmentShader);
-    if(!(gl.getShaderParameter(fragmentShader, WebGL.COMPILE_STATUS) as bool)) {
+    if (!(gl.getShaderParameter(fragmentShader, WebGL.COMPILE_STATUS) as bool)) {
       String? fragmentLog = gl.getShaderInfoLog(fragmentShader);
       if (fragmentLog != null && fragmentLog.isNotEmpty) {
         print("failed to compile fragment shader $fragmentLog.");
@@ -82,10 +82,9 @@ class TurtleRenderer {
     gl.enableVertexAttribArray(colorAttribIndex);
   }
 
-  render(List<TreeNode> data, Map<String, TurtleOption> turtleOptions) {
+  render(List<TreeNode> data, Map<String, List<TurtleOption>> turtleOptions) {
     List<double> buffer = treeNodesToVertexData(data, turtleOptions);
     vertexCount = buffer.length ~/ 7;
-    print("vertexCount $vertexCount");
 
     buffer.addAll([
       // y axis red
@@ -143,7 +142,7 @@ class TurtleRenderer {
     });
   }
 
-  List<double> treeNodesToVertexData(List<TreeNode> data, Map<String, TurtleOption> turtleOptions) {
+  List<double> treeNodesToVertexData(List<TreeNode> data, Map<String, List<TurtleOption>> turtleOptionsMap) {
     Vector3 position = Vector3(0, 0, 0);
     Vector3 rotationVector = Vector3(1, 0, 0);
     var buffer = <double>[];
@@ -152,34 +151,36 @@ class TurtleRenderer {
     for (TreeNode treeNode in data) {
       for (int i = 0; i < treeNode.value.length; i++) {
         String letter = treeNode.value[i];
-        TurtleOption? turtleOption = turtleOptions[letter];
+        List<TurtleOption>? turtleOptions = turtleOptionsMap[letter];
 
-        if (turtleOption == null) {
+        if (turtleOptions == null) {
           continue;
         }
 
-        switch (turtleOption.command) {
-          case 'Forward':
-            position[0] += rotationVector[0] * turtleOption.value;
-            position[1] += rotationVector[1] * turtleOption.value;
-            position[2] += rotationVector[2] * turtleOption.value;
-            // white color
-            buffer.addAll([position[0], position[1], position[2], 1, 1, 1, 1]);
-            break;
-          case 'X Rotation':
-            Quaternion quaternion = Quaternion.axisAngle(Vector3(1, 0, 0), turtleOption.value * pi / 180);
-            quaternion.rotate(rotationVector);
-            break;
-          case 'Y Rotation':
-            Quaternion quaternion = Quaternion.axisAngle(Vector3(0, 1, 0), turtleOption.value * pi / 180);
-            quaternion.rotate(rotationVector);
-            break;
-          case 'Z Rotation':
-            Quaternion quaternion = Quaternion.axisAngle(Vector3(0, 0, 1), turtleOption.value * pi / 180);
-            quaternion.rotate(rotationVector);
-            break;
-          default:
-            throw Exception('Unsupported command');
+        for (TurtleOption turtleOption in turtleOptions) {
+          switch (turtleOption.command) {
+            case 'Forward':
+              position[0] += rotationVector[0] * turtleOption.value;
+              position[1] += rotationVector[1] * turtleOption.value;
+              position[2] += rotationVector[2] * turtleOption.value;
+              // white color
+              buffer.addAll([position[0], position[1], position[2], 1, 1, 1, 1]);
+              break;
+            case 'X Rotation':
+              Quaternion quaternion = Quaternion.axisAngle(Vector3(1, 0, 0), turtleOption.value * pi / 180);
+              quaternion.rotate(rotationVector);
+              break;
+            case 'Y Rotation':
+              Quaternion quaternion = Quaternion.axisAngle(Vector3(0, 1, 0), turtleOption.value * pi / 180);
+              quaternion.rotate(rotationVector);
+              break;
+            case 'Z Rotation':
+              Quaternion quaternion = Quaternion.axisAngle(Vector3(0, 0, 1), turtleOption.value * pi / 180);
+              quaternion.rotate(rotationVector);
+              break;
+            default:
+              throw Exception('Unsupported command');
+          }
         }
       }
     }
