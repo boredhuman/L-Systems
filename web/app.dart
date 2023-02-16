@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'dart:html';
 import 'dart:math';
 import 'dart:svg';
 
-import 'fibo_word_frac.dart';
 import 'production_rule.dart';
 import 'save_load.dart';
 import 'string_view.dart';
@@ -52,6 +50,16 @@ class App {
                     Element clicked = event.target as Element;
 
                     clicked.parent!.insertBefore(createProductionRule(null, null, null), clicked);
+                  }),
+                ParagraphElement()
+                  ..text = "Clear Production Rules"
+                  ..classes.addAll(["btn"])
+                  ..onClick.listen((event) {
+                    List<Node> productionRules = document.getElementsByClassName("pr");
+
+                    for (int i = productionRules.length - 1; i > -1; i--) {
+                      productionRules[i].remove();
+                    }
                   }),
                 DivElement()
                   ..style.setProperty("display", "flex")
@@ -105,6 +113,16 @@ class App {
                             .parent!
                             .insertBefore(createTurtleConfigRow("Forward", "F", 1), event.currentTarget as Element);
                       }),
+                    ParagraphElement()
+                      ..text = "Clear Turtle Map"
+                      ..classes.addAll(["btn"])
+                      ..onClick.listen((event) {
+                        List<Node> productionRules = document.getElementsByClassName("turtleConfigRow");
+
+                        for (int i = productionRules.length - 1; i > -1; i--) {
+                          productionRules[i].remove();
+                        }
+                      }),
                     createSlider("X Rot:", "xRot"),
                     createSlider("Y Rot:", "yRot"),
                     createSlider("Z Rot:", "zRot")
@@ -150,6 +168,13 @@ class App {
                       ..id = "nodeCount"
                       ..text = 0.toString()
                   ]),
+                ParagraphElement()
+                  ..text = "Recenter"
+                  ..classes.addAll(["btn"])
+                  ..onClick.listen((event) {
+                    treeRenderer.recenter();
+                    turtleRenderer.recenter();
+                  }),
                 // step button
                 ParagraphElement()
                   ..text = "Step"
@@ -344,6 +369,7 @@ class App {
   // for creating a row for the turtle configuration
   Element createTurtleConfigRow([String? command, String? symbol, int? amount]) {
     return DivElement()
+      ..classes.add("turtleConfigRow")
       ..style.setProperty("display", "flex")
       ..style.setProperty("margin-top", "5px")
       ..classes.addAll(["turtleOption"])
@@ -504,6 +530,29 @@ class App {
       ..style.setProperty("display", "flex")
       ..style.setProperty("height", "25px")
       ..children.addAll([
+        ParagraphElement()
+          ..text = "^"
+          ..style.setProperty("margin", "0 2px")
+          ..style.setProperty("width", "20px")
+          ..classes.add("btn")
+          ..onClick.listen((event) {
+            Element current = (event.currentTarget as Element).parent!;
+            if (current.previousElementSibling != null && current.previousElementSibling!.classes.contains("pr")) {
+              current.parent!.insertBefore(current, current.previousElementSibling);
+            }
+          }),
+        ParagraphElement()
+          ..text = "^"
+          ..style.setProperty("margin", "0 2px")
+          ..style.setProperty("width", "20px")
+          ..style.setProperty("transform", "rotate(180deg)")
+          ..classes.add("btn")
+          ..onClick.listen((event) {
+            Element current = (event.currentTarget as Element).parent!;
+            if (current.nextElementSibling != null && current.nextElementSibling!.classes.contains("pr")) {
+              current.parent!.insertBefore(current.nextElementSibling!, current);
+            }
+          }),
         SelectElement()
           ..classes.add("type")
           ..style.setProperty("margin-right", "5px")
@@ -589,7 +638,7 @@ class App {
             print(lhsText);
             print(lhsLeft.value != null);
             int midIndex = (lhsLeft.value != null && lhsLeft.value != "") && (lhsRight.value != null && lhsRight.value != "") ? 1 : 0;
-            if (midIndex == 0 && (lhsLeft.value != null && lhsLeft.value != ""))  {
+            if (midIndex == 0 && (lhsLeft.value != null && lhsLeft.value != "")) {
               midIndex = 1;
             }
             print(midIndex);

@@ -1,6 +1,7 @@
 import 'dart:html';
 import 'dart:svg';
 
+import 'main.dart';
 import 'tree_node.dart';
 
 class TreeRenderer {
@@ -217,5 +218,10 @@ class TreeRenderer {
     } else {
       return 150;
     }
+  }
+  
+  void recenter() {
+    svgContainer.removeAttribute("transform");
+    layoutTreeNodeInit(TreeNode("")..children.add(app.root), 50, true);
   }
 }
