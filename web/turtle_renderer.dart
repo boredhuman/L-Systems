@@ -31,6 +31,8 @@ class TurtleRenderer {
 
   int prevY = 0;
 
+  List<int> resets = [];
+
   TurtleRenderer(this.canvas) : gl = canvas.getContext3d(stencil: false, antialias: false)! {
     Program program = gl.createProgram();
     Shader vertexShader = gl.createShader(WebGL.VERTEX_SHADER);
@@ -133,7 +135,25 @@ class TurtleRenderer {
 
     gl.uniformMatrix4fv(transformMatrixUniformLocation, false, matrix4.storage);
 
-    gl.drawArrays(WebGL.LINE_STRIP, 0, vertexCount);
+    if (resets.isEmpty) {
+      // no push / pops render line in one go
+      gl.drawArrays(WebGL.LINE_STRIP, 0, vertexCount);
+    } else {
+      // render first part
+      gl.drawArrays(WebGL.LINE_STRIP, 0, resets[0]);
+      int offsetTotal = resets[0];
+      for (int i = 0; i < resets.length; i++) {
+        int offset = resets[0];
+        // last line
+        if (i == resets.length - 1) {
+          gl.drawArrays(WebGL.LINE_STRIP, offsetTotal, vertexCount - offsetTotal);
+        } else {
+          // intermediate lines
+          gl.drawArrays(WebGL.LINE_STRIP, offsetTotal, offset - offsetTotal);
+          offsetTotal += offset;
+        }
+      }
+    }
 
     gl.drawArrays(WebGL.LINES, vertexCount, 6);
 
@@ -147,6 +167,8 @@ class TurtleRenderer {
     Vector3 rotationVector = Vector3(1, 0, 0);
     var buffer = <double>[];
     buffer.addAll([position[0], position[1], position[2], 1, 1, 1, 1]);
+    List<Vector3> positionStateStack = [];
+    List<Vector3> rotationVectorStack = [];
 
     for (TreeNode treeNode in data) {
       for (int i = 0; i < treeNode.value.length; i++) {
@@ -177,6 +199,16 @@ class TurtleRenderer {
             case 'Z Rotation':
               Quaternion quaternion = Quaternion.axisAngle(Vector3(0, 0, 1), turtleOption.value * pi / 180);
               quaternion.rotate(rotationVector);
+              break;
+            case 'Push State':
+              positionStateStack.add(Vector3.zero()..setFrom(position));
+              rotationVectorStack.add(Vector3.zero()..setFrom(rotationVector));
+              break;
+            case 'Pop State':
+              resets.add(buffer.length ~/ 7);
+              position = positionStateStack.removeLast();
+              rotationVector = rotationVectorStack.removeLast();
+              buffer.addAll([position[0], position[1], position[2], 1, 1, 1, 1]);
               break;
             default:
               throw Exception('Unsupported command');

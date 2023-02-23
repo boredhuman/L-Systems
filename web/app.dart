@@ -331,11 +331,11 @@ class App {
     for (Node turtleOptionElement in turtleOptions) {
       if (turtleOptionElement is Element) {
         // command such as move forward, turn left, turn right
-        String command = (turtleOptionElement.children[0] as SelectElement).value!;
+        String command = (turtleOptionElement.children[2] as SelectElement).value!;
         // the lhs of the production rule
-        String symbol = (turtleOptionElement.children[1] as InputElement).value!;
+        String symbol = (turtleOptionElement.children[3] as InputElement).value!;
         // the rhs of the production rule
-        String value = (turtleOptionElement.children[2] as InputElement).value!;
+        String value = (turtleOptionElement.children[4] as InputElement).value!;
 
         TurtleOption turtleOption = TurtleOption(command, symbol, double.parse(value));
 
@@ -374,6 +374,29 @@ class App {
       ..style.setProperty("margin-top", "5px")
       ..classes.addAll(["turtleOption"])
       ..children.addAll([
+        ParagraphElement()
+          ..text = "^"
+          ..style.setProperty("margin", "0 2px")
+          ..style.setProperty("min-width", "20px")
+          ..classes.add("btn")
+          ..onClick.listen((event) {
+            Element current = (event.currentTarget as Element).parent!;
+            if (current.previousElementSibling != null && current.previousElementSibling!.classes.contains("turtleConfigRow")) {
+              current.parent!.insertBefore(current, current.previousElementSibling);
+            }
+          }),
+        ParagraphElement()
+          ..text = "^"
+          ..style.setProperty("margin", "0 2px")
+          ..style.setProperty("min-width", "20px")
+          ..style.setProperty("transform", "rotate(180deg)")
+          ..classes.add("btn")
+          ..onClick.listen((event) {
+            Element current = (event.currentTarget as Element).parent!;
+            if (current.nextElementSibling != null && current.nextElementSibling!.classes.contains("turtleConfigRow")) {
+              current.parent!.insertBefore(current.nextElementSibling!, current);
+            }
+          }),
         SelectElement()
           ..children.addAll([
             OptionElement()
@@ -387,7 +410,13 @@ class App {
               ..text = "Y Rotation",
             OptionElement()
               ..value = "Z Rotation"
-              ..text = "Z Rotation"
+              ..text = "Z Rotation",
+            OptionElement()
+              ..value = "Push State"
+              ..text = "Push State",
+            OptionElement()
+              ..value = "Pop State"
+              ..text = "Pop State"
           ])
           ..value = command ?? "",
         InputElement()
