@@ -91,6 +91,7 @@ class TreeRenderer {
           ..setAttribute("y", "$y")
           ..setAttribute("width", "100")
           ..setAttribute("height", "25")
+          ..style.setProperty("background-color", childNode.color)
           ..classes.add("nodeBox")
           ..children.add(ParagraphElement()
             ..text = childNode.value
@@ -222,6 +223,6 @@ class TreeRenderer {
   
   void recenter() {
     svgContainer.removeAttribute("transform");
-    layoutTreeNodeInit(TreeNode("")..children.add(app.root), 50, true);
+    layoutTreeNodeInit(TreeNode("", "white")..children.add(app.root), 50, true);
   }
 }

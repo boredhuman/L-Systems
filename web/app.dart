@@ -13,7 +13,7 @@ import 'turtle_renderer.dart';
 class App {
   late Element svgContainer;
   late TreeRenderer treeRenderer;
-  TreeNode root = TreeNode("");
+  TreeNode root = TreeNode("", "Gray");
   int iterations = 0;
   CanvasElement canvas = CanvasElement();
   late TurtleRenderer turtleRenderer = TurtleRenderer(canvas);
@@ -49,7 +49,7 @@ class App {
                   ..onClick.listen((event) {
                     Element clicked = event.target as Element;
 
-                    clicked.parent!.insertBefore(createProductionRule(null, null, null), clicked);
+                    clicked.parent!.insertBefore(createProductionRule(null, null, null, "#333"), clicked);
                   }),
                 ParagraphElement()
                   ..text = "Clear Production Rules"
@@ -190,7 +190,7 @@ class App {
 
                     // axiom has been changed
                     if (axiom != root.value) {
-                      root = TreeNode(axiom);
+                      root = TreeNode(axiom, "Gray");
                       iterations = 0;
                       setCurrentGeneration(iterations);
                     }
@@ -221,7 +221,7 @@ class App {
                     } else {
                       // render tree
                       // svgContainer.children.clear();
-                      treeRenderer.layoutTreeNodeInit(TreeNode("")..children.add(root), 50);
+                      treeRenderer.layoutTreeNodeInit(TreeNode("", "Gray")..children.add(root), 50);
                     }
                     ParagraphElement nodeCount = document.getElementById("nodeCount") as ParagraphElement;
                     nodeCount.text = this.nodeCount.toString();
@@ -283,7 +283,7 @@ class App {
                   return;
                 }
 
-                treeRenderer.layoutTreeNodeInit(TreeNode("")..children.add(root), 50, true);
+                treeRenderer.layoutTreeNodeInit(TreeNode("", "Gray")..children.add(root), 50, true);
               }
             }
           })
@@ -351,7 +351,7 @@ class App {
   void reset(event) {
     String renderMode = (document.getElementById("renderMode") as SelectElement).value!;
     InputElement axiomElement = document.getElementById("axiom") as InputElement;
-    root = TreeNode(axiomElement.value!);
+    root = TreeNode(axiomElement.value!, "Gray");
     iterations = 0;
     this.nodeCount = 0;
     setCurrentGeneration(iterations);
@@ -362,7 +362,7 @@ class App {
       turtleRenderer.render(getElementsAtDepth(root, iterations, 0), getTurtleConfig());
     } else {
       svgContainer.children.clear();
-      treeRenderer.layoutTreeNodeInit(TreeNode("")..children.add(root), 50);
+      treeRenderer.layoutTreeNodeInit(TreeNode("", "Gray")..children.add(root), 50);
     }
   }
 
@@ -475,7 +475,10 @@ class App {
       ProductionRule? rhs = productionRulesMap[symbol];
       bool applied = false;
       if (rhs != null) {
-        stringView.currentNode.addNode(TreeNode(rhs.getRhs()));
+        MapEntry<String, String> nodeVal = rhs.getRhs();
+        if (nodeVal.key.isNotEmpty) {
+          stringView.currentNode.addNode(TreeNode(nodeVal.key, nodeVal.value));
+        }
         nodeCount++;
         mappedChars[index] = true;
         applied = true;
@@ -489,20 +492,28 @@ class App {
         if (rhs != null) {
           if (rhs.type == "CS") {
             // context sensitive
+            // sensitive is on the right
+            MapEntry<String, String> nodeVal = rhs.getRhs();
+            if (nodeVal.key.isNotEmpty) {
+              stringView.currentNode.addNode(TreeNode(nodeVal.key, nodeVal.value));
+            }
+            nodeCount++;
+            mappedChars[index] = true;
+            applied = true;
             // sensitive part is on the left
-            if (rhs.midIndex == 1) {
-              stringView.peakNextSymbolNode()!.addNode(TreeNode(rhs.getRhs()));
+            if (rhs.other != null) {
+              MapEntry<String, String> nodeVal = rhs.other!.getRhs();
+              if (nodeVal.key.isNotEmpty) {
+                stringView.peakNextSymbolNode()!.addNode(TreeNode(nodeVal.key, nodeVal.value));
+              }
               nodeCount++;
               mappedChars[index + 1] = true;
-            } else {
-              // sensitive is on the right
-              stringView.currentNode.addNode(TreeNode(rhs.getRhs()));
-              nodeCount++;
-              mappedChars[index] = true;
-              applied = true;
             }
           } else {
-            stringView.currentNode.addNode(TreeNode(rhs.getRhs()));
+            MapEntry<String, String> nodeVal = rhs.getRhs();
+            if (nodeVal.key.isNotEmpty) {
+              stringView.currentNode.addNode(TreeNode(nodeVal.key, nodeVal.value));
+            }
             nodeCount++;
             mappedChars[index] = true;
             mappedChars[index + 1] = true;
@@ -518,11 +529,17 @@ class App {
 
         if (rhs != null) {
           if (rhs.type == "CS") {
-            stringView.peakNextSymbolNode()!.addNode(TreeNode(rhs.getRhs()));
+            MapEntry<String, String> nodeVal = rhs.getRhs();
+            if (nodeVal.key.isNotEmpty) {
+              stringView.peakNextSymbolNode()!.addNode(TreeNode(nodeVal.key, nodeVal.value));
+            }
             nodeCount++;
             mappedChars[index + 1] = true;
           } else {
-            stringView.currentNode.addNode(TreeNode(rhs.getRhs()));
+            MapEntry<String, String> nodeVal = rhs.getRhs();
+            if (nodeVal.key.isNotEmpty) {
+              stringView.currentNode.addNode(TreeNode(nodeVal.key, nodeVal.value));
+            }
             nodeCount++;
             mappedChars[index] = true;
             mappedChars[index + 1] = true;
@@ -534,7 +551,7 @@ class App {
 
       // no mapping for this sub set of symbols so assume its a terminal and keep it
       if (!applied && !mappedChars[index]) {
-        stringView.currentNode.addNode(TreeNode(symbol!));
+        stringView.currentNode.addNode(TreeNode(symbol!, "Gray"));
         nodeCount++;
       }
       index++;
@@ -551,7 +568,7 @@ class App {
     return stepSizeElement.valueAsNumber!.toInt();
   }
 
-  DivElement createProductionRule(String? lhs, String? rhs, String? probability, {String? left, String? right}) {
+  DivElement createProductionRule(String? lhs, String? rhs, String? probability, String colour, {String? left, String? right}) {
     return DivElement()
       // pr = production rule
       ..classes.addAll(["pr"])
@@ -635,6 +652,11 @@ class App {
           ..style.setProperty("text-align", "center")
           ..style.setProperty("border-radius", "5px")
           ..value = probability ?? "100",
+        InputElement(type: "text")
+          ..value = colour
+          ..classes.addAll(["colour"])
+          ..style.setProperty("width", "0")
+          ..style.setProperty("min-width", "60px"),
         SpanElement()
           ..classes.addAll(["material-symbols-outlined"])
           ..text = "close"
@@ -656,6 +678,7 @@ class App {
         InputElement rhs = node.getElementsByClassName("rhs").first as InputElement;
         InputElement prob = node.getElementsByClassName("prob").first as InputElement;
         SelectElement type = node.getElementsByClassName("type").first as SelectElement;
+        InputElement colour = node.getElementsByClassName("colour").first as InputElement;
 
         String? lhsText = "${lhsLeft.value}${lhs.value}${lhsRight.value}";
         String rhsText = rhs.value ?? "";
@@ -663,18 +686,15 @@ class App {
 
         if (lhsText.isNotEmpty) {
           ProductionRule? productionRule = productionRulesMap[lhsText];
+          int midIndex = (lhsLeft.value != null && lhsLeft.value != "") && (lhsRight.value != null && lhsRight.value != "") ? 1 : 0;
+          if (midIndex == 0 && (lhsLeft.value != null && lhsLeft.value != "")) {
+            midIndex = 1;
+          }
           if (productionRule == null) {
-            print(lhsText);
-            print(lhsLeft.value != null);
-            int midIndex = (lhsLeft.value != null && lhsLeft.value != "") && (lhsRight.value != null && lhsRight.value != "") ? 1 : 0;
-            if (midIndex == 0 && (lhsLeft.value != null && lhsLeft.value != "")) {
-              midIndex = 1;
-            }
-            print(midIndex);
-            productionRule = ProductionRule(type.value!, midIndex);
+            productionRule = ProductionRule(type.value!);
             productionRulesMap[lhsText] = productionRule;
           }
-          productionRule.addRHS(rhsText, probability);
+          productionRule.addRHS(rhsText, probability, colour.value ?? "Gray", midIndex);
         }
       }
     }

@@ -1,44 +1,59 @@
 import 'dart:math';
 
 class ProductionRule {
-  List<MapEntry<String, double>> pairs = [];
+  List<MapEntry<String, MapEntry<double, String>>> pairs = [];
   double sum = 0;
   Random random = Random();
   String type;
-  int midIndex;
 
-  ProductionRule(this.type, this.midIndex);
+  // this is when there is an identical string of length 2 but difference context sensitive symbols
+  // this on has the last symbol as the context sensitive one
+  ProductionRule? other;
 
-  void addRHS(String rhs, double probability) {
-    pairs.add(MapEntry(rhs, probability));
+  ProductionRule(this.type);
+
+  void addRHS(String rhs, double probability, String colour, int midIndex) {
+    if (type == "CS") {
+      if (midIndex == 0) {
+        pairs.add(MapEntry(rhs, MapEntry(probability, colour)));
+      } else {
+        other ??= ProductionRule(type);
+
+        other!.addRHS(rhs, probability, colour, 0);
+      }
+    } else {
+      pairs.add(MapEntry(rhs, MapEntry(probability, colour)));
+    }
   }
 
   void done() {
-    List<MapEntry<String, double>> rhsList = pairs
+    List<MapEntry<String, MapEntry<double, String>>> rhsList = pairs
       ..sort((left, right) {
-        return left.value.compareTo(right.value);
+        return left.value.key.compareTo(right.value.key);
       });
-    sum = rhsList.map((e) => e.value).reduce((value, element) => value += element);
+    sum = rhsList.map((e) => e.value.key).reduce((value, element) => value += element);
+
+    other?.done();
   }
 
   // get rhs will go thru the probabilities
-  String getRhs() {
+  MapEntry<String, String> getRhs() {
     if (pairs.isEmpty) {
-      return "";
+      return MapEntry("", "Gray");
     }
     if (pairs.length == 1) {
-      return pairs.first.key;
+      return MapEntry(pairs.first.key, pairs.first.value.value);
     } else {
       double rand = random.nextDouble() * sum;
       double offset = 0;
-      for (MapEntry<String, double> r in pairs) {
-        if (rand < offset + r.value) {
-          return r.key;
+      for (MapEntry<String, MapEntry<double, String>> r in pairs) {
+        if (rand < offset + r.value.key) {
+          return MapEntry(r.key, r.value.value);
         }
-        offset += r.value;
+        offset += r.value.key;
       }
     }
     // fail safe should not be called
-    return pairs.last.key;
+    return MapEntry(pairs.last.key, "Gray");
   }
 }

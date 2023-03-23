@@ -32,10 +32,45 @@ class SaveLoad {
     for (MapEntry<dynamic, dynamic> rule in productionRulesMap.entries) {
       String lhs = rule.key;
       List<dynamic> pairs = rule.value["pairs"];
+      List<dynamic>? otherPairs = rule.value["other"];
+
       for (dynamic pair in pairs) {
         String rhs = pair["key"];
-        dynamic probability = pair["value"].toString();
-        axiomElement.parent!.insertBefore(app.createProductionRule(lhs, rhs, probability), axiomElement.nextNode!);
+        dynamic probability;
+        dynamic colour;
+        if (pair["value"] is Map) {
+          probability = pair["value"]["key"].toString();
+          colour = pair["value"]["value"].toString();
+        } else {
+          probability = pair["value"].toString();
+          colour = "#333";
+        }
+
+        String? left;
+        String? center;
+        String? right;
+        if (lhs.length == 3) {
+          left = lhs[0];
+          center = lhs[1];
+          right = lhs[2];
+        } else if (lhs.length == 2) {
+          left = lhs[0];
+          center = lhs[1];
+        } else {
+          center = lhs[0];
+        }
+        axiomElement.parent!
+            .insertBefore(app.createProductionRule(center, rhs, probability, colour, left: left, right: right), axiomElement.nextNode!);
+      }
+
+      if (otherPairs != null) {
+        for (dynamic pair in otherPairs) {
+          String rhs = pair["key"];
+          dynamic probability = pair["value"].toString();
+          String? right = lhs[1];
+          String? center = lhs[0];
+          axiomElement.parent!.insertBefore(app.createProductionRule(center, rhs, probability, "#333", right: right), axiomElement.nextNode!);
+        }
       }
     }
 
@@ -55,7 +90,18 @@ class SaveLoad {
     Map<String, dynamic> saveData = {};
     saveData["axiom"] = app.getAxiom();
     saveData["productionRules"] = app.getProductionRulesMap().map((key, value) => MapEntry(key, {
-          "pairs": value.pairs.map((e) => {"key": e.key, "value": e.value}).toList()
+          "pairs": value.pairs
+              .map((e) => {
+                    "key": e.key,
+                    "value": {"key": e.value.key, "value": e.value.value}
+                  })
+              .toList(),
+          "other": value.other?.pairs
+              .map((e) => {
+                    "key": e.key,
+                    "value": {"key": e.value.key, "value": e.value.value}
+                  })
+              .toList()
         }));
     saveData["turtleData"] = app
         .getTurtleConfig()

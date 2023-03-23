@@ -17,6 +17,7 @@ class TurtleRenderer {
 
   late Buffer vertexData;
 
+  // contains the number of vertices to draw excluding the axis
   int vertexCount = 0;
 
   double xTranslate = 0;
@@ -66,7 +67,7 @@ class TurtleRenderer {
 
     lineProgram = program;
 
-    gl.clearColor(0, 0, 0, 0);
+    gl.clearColor(1, 1, 1, 0);
 
     // setup
     gl.useProgram(lineProgram);
@@ -140,22 +141,22 @@ class TurtleRenderer {
       gl.drawArrays(WebGL.LINE_STRIP, 0, vertexCount);
     } else {
       // render first part
-      gl.drawArrays(WebGL.LINE_STRIP, 0, resets[0]);
-      int offsetTotal = resets[0];
+      int first = resets[0];
+      gl.drawArrays(WebGL.LINE_STRIP, 0, first);
       for (int i = 0; i < resets.length; i++) {
-        int offset = resets[0];
         // last line
         if (i == resets.length - 1) {
-          gl.drawArrays(WebGL.LINE_STRIP, offsetTotal, vertexCount - offsetTotal);
+          gl.drawArrays(WebGL.LINE_STRIP, first, vertexCount - first);
         } else {
+          int next = resets[i + 1];
           // intermediate lines
-          gl.drawArrays(WebGL.LINE_STRIP, offsetTotal, offset - offsetTotal);
-          offsetTotal += offset;
+          gl.drawArrays(WebGL.LINE_STRIP, first, next - first);
+          first = next;
         }
       }
     }
 
-    gl.drawArrays(WebGL.LINES, vertexCount, 6);
+    // gl.drawArrays(WebGL.LINES, vertexCount, 6);
 
     window.requestAnimationFrame((highResTime) {
       // call render to complete render loop or do nothing to render once
@@ -169,6 +170,7 @@ class TurtleRenderer {
     buffer.addAll([position[0], position[1], position[2], 1, 1, 1, 1]);
     List<Vector3> positionStateStack = [];
     List<Vector3> rotationVectorStack = [];
+    resets.clear();
 
     for (TreeNode treeNode in data) {
       for (int i = 0; i < treeNode.value.length; i++) {
@@ -186,7 +188,7 @@ class TurtleRenderer {
               position[1] += rotationVector[1] * turtleOption.value;
               position[2] += rotationVector[2] * turtleOption.value;
               // white color
-              buffer.addAll([position[0], position[1], position[2], 1, 1, 1, 1]);
+              buffer.addAll([position[0], position[1], position[2], 0, 0, 0, 1]);
               break;
             case 'X Rotation':
               Quaternion quaternion = Quaternion.axisAngle(Vector3(1, 0, 0), turtleOption.value * pi / 180);
@@ -208,7 +210,7 @@ class TurtleRenderer {
               resets.add(buffer.length ~/ 7);
               position = positionStateStack.removeLast();
               rotationVector = rotationVectorStack.removeLast();
-              buffer.addAll([position[0], position[1], position[2], 1, 1, 1, 1]);
+              buffer.addAll([position[0], position[1], position[2], 0, 0, 0, 1]);
               break;
             default:
               throw Exception('Unsupported command');

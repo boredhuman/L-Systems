@@ -8,8 +8,9 @@ class TreeNode {
   Element? self;
   Element? childNodeSpanLine;
   Element? lineFromNodeToSpanLine;
+  String color;
 
-  TreeNode(this.value);
+  TreeNode(this.value, this.color);
 
   addNode(TreeNode node) {
     children.add(node);

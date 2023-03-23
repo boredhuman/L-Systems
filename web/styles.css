@@ -10,7 +10,7 @@ html, body {
 
 .leftBar {
     z-index: 1;
-    width: 500px;
+    width: 550px;
     background-color: #222222;
     height: 100%;
     text-align: center;
@@ -48,7 +48,6 @@ input {
 }
 
 .nodeBox {
-    background-color: #333;
     border-radius: 3px;
 }
 
