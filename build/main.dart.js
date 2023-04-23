@@ -5025,7 +5025,7 @@ q.aZ(a,b,c,0)}else B.b.p(r.a,new A.n(a,new A.n(b,c,t.r),t.E))},
 b4(){var s=this.a,r=A.Z(s),q=r.h("u(1,1)?").a(new A.ek())
 if(!!s.immutable$list)A.af(A.B("sort"))
 A.iV(s,q,r.c)
-this.sbr(new A.G(s,r.h("t(1)").a(new A.el()),r.h("G<1,t>")).bd(0,new A.em()))
+if(s.length!==0)this.sbr(new A.G(s,r.h("t(1)").a(new A.el()),r.h("G<1,t>")).bd(0,new A.em()))
 r=this.e
 if(r!=null)r.b4()},
 T(){var s,r,q,p,o,n,m=this.a,l=m.length
@@ -5473,7 +5473,8 @@ else{n=a9+1
 if(!(n<q))return A.e(b3,n)
 b0=b3[n]
 b2.drawArrays(3,a8,b0-a8)
-a8=b0}}b2=window
+a8=b0}}b2.drawArrays(1,b1.e,6)
+b2=window
 b2.toString
 b3=t.c4.a(new A.eF())
 B.w.bD(b2)

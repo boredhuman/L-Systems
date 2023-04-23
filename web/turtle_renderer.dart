@@ -156,7 +156,7 @@ class TurtleRenderer {
       }
     }
 
-    // gl.drawArrays(WebGL.LINES, vertexCount, 6);
+    gl.drawArrays(WebGL.LINES, vertexCount, 6);
 
     window.requestAnimationFrame((highResTime) {
       // call render to complete render loop or do nothing to render once

@@ -31,7 +31,10 @@ class ProductionRule {
       ..sort((left, right) {
         return left.value.key.compareTo(right.value.key);
       });
-    sum = rhsList.map((e) => e.value.key).reduce((value, element) => value += element);
+
+    if (rhsList.isNotEmpty) {
+      sum = rhsList.map((e) => e.value.key).reduce((value, element) => value += element);
+    }
 
     other?.done();
   }
